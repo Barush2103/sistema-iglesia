@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Alumno {
+  id              Int          @id @default(autoincrement())
+  nombre          String
+  nivel           Nivel
+  catequista      String?
+  dia             String?      // Lunes, Miércoles, etc.
+  responsable     String?
+  telefonoCasa    String?
+  telefonoCelular String?
+  documentos      Documento[]
+  pagos           Pago[]
+  aportaciones    Aportacion[]
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+model Documento {
+  id        Int      @id @default(autoincrement())
+  alumnoId  Int
+  alumno    Alumno   @relation(fields: [alumnoId], references: [id], onDelete: Cascade)
+  tipo      String   // "acta_nacimiento", "fe_bautizo", etc.
+  entregado Boolean  @default(false)
+  fecha     DateTime?
+  notas     String?
+  createdAt DateTime @default(now())
+}
+
+model Pago {
+  id        Int      @id @default(autoincrement())
+  alumnoId  Int
+  alumno    Alumno   @relation(fields: [alumnoId], references: [id], onDelete: Cascade)
+  tipo      String   // "sacramento", "retiro", "ofrenda", "silla"
+  monto     Float?
+  pagado    Boolean  @default(false)
+  fecha     DateTime?
+  notas     String?
+  createdAt DateTime @default(now())
+}
+
+model Colecta {
+  id           Int          @id @default(autoincrement())
+  nombre       String
+  descripcion  String?
+  meta         Float?
+  activa       Boolean      @default(true)
+  aportaciones Aportacion[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+model Aportacion {
+  id        Int      @id @default(autoincrement())
+  colectaId Int
+  colecta   Colecta  @relation(fields: [colectaId], references: [id], onDelete: Cascade)
+  alumnoId  Int?
+  alumno    Alumno?  @relation(fields: [alumnoId], references: [id], onDelete: SetNull)
+  nombre    String   // puede ser alumno o persona externa
+  monto     Float
+  notas     String?
+  fecha     DateTime @default(now())
+  createdAt DateTime @default(now())
+}
+
+enum Nivel {
+  PRECOMUNION
+  COMUNION
+  PRECONFIRMACION
+  CONFIRMACION
+}
