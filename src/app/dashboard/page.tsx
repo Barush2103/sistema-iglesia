@@ -223,8 +223,72 @@ function ColectaDetalle({ colecta, onClose, onRefresh }: { colecta: Colecta; onC
         </div>
       )}
 
-      <div style={{ marginTop:16,display:"flex",gap:8,justifyContent:"space-between",alignItems:"center" }}>
-        <button style={{ ...btnGold,fontSize:12 }} onClick={()=>window.print()}>🖨️ Imprimir lista</button>
+      <div style={{ marginTop:16,display:"flex",gap:8,justifyContent:"space-between",alignItems:"center" }} className="no-print">
+        <button style={{ ...btnGold,fontSize:12 }} onClick={()=>{
+          const w = window.open("","_blank","width=800,height:600");
+          if (!w) return;
+          const total = colecta.aportaciones.reduce((s,a)=>s+a.monto,0);
+          const filas = colecta.aportaciones.map((a,i)=>`
+            <tr style="border-bottom:1px solid #ddd;">
+              <td style="padding:7px 10px;text-align:center;">${i+1}</td>
+              <td style="padding:7px 10px;font-weight:500;">${a.nombre}</td>
+              <td style="padding:7px 10px;text-align:right;font-weight:600;">$${a.monto.toLocaleString("es-MX",{minimumFractionDigits:2})}</td>
+              <td style="padding:7px 10px;text-align:center;">${new Date(a.fecha).toLocaleDateString("es-MX",{day:"numeric",month:"long",year:"numeric"})}</td>
+              <td style="padding:7px 10px;color:#666;">${a.notas||""}</td>
+            </tr>`).join("");
+          w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${colecta.nombre}</title>
+          <style>
+            body{font-family:Arial,sans-serif;margin:30px;color:#1c1c1a;font-size:13px;}
+            h1{font-size:16px;font-weight:700;margin:0;}
+            h2{font-size:13px;font-weight:400;margin:4px 0 0;}
+            .header{text-align:center;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #1c1c1a;}
+            .cruz{font-size:22px;margin-bottom:4px;}
+            .subtitulo{font-size:12px;color:#555;margin-top:6px;}
+            table{width:100%;border-collapse:collapse;margin-top:4px;}
+            thead tr{background:#1c1c1a;color:#fff;}
+            thead th{padding:9px 10px;text-align:left;font-size:12px;font-weight:600;}
+            thead th.center{text-align:center;}
+            thead th.right{text-align:right;}
+            tbody tr:nth-child(even){background:#f9f8f6;}
+            .total-row{background:#b5883a!important;color:#fff;font-weight:700;}
+            .total-row td{padding:9px 10px;font-size:13px;}
+            .footer{margin-top:16px;font-size:11px;color:#888;display:flex;justify-content:space-between;}
+            @media print{body{margin:15px;}}
+          </style></head><body>
+          <div class="header">
+            <div class="cruz">✝</div>
+            <h1>PARROQUIA MARÍA MADRE DE DIOS</h1>
+            <h2>${colecta.nombre}</h2>
+            ${colecta.descripcion?`<div class="subtitulo">${colecta.descripcion}</div>`:""}
+            ${colecta.meta?`<div class="subtitulo">Meta: $${colecta.meta.toLocaleString("es-MX",{minimumFractionDigits:2})}</div>`:""}
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th class="center" style="width:40px;">No.</th>
+                <th>Nombre</th>
+                <th class="right" style="width:120px;">Monto</th>
+                <th class="center" style="width:130px;">Fecha</th>
+                <th style="width:180px;">Notas</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${filas}
+              <tr class="total-row">
+                <td colspan="2" style="text-align:right;">TOTAL</td>
+                <td style="text-align:right;">$${total.toLocaleString("es-MX",{minimumFractionDigits:2})}</td>
+                <td colspan="2">${colecta.aportaciones.length} aportaciones</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="footer">
+            <span>Generado: ${new Date().toLocaleDateString("es-MX",{day:"numeric",month:"long",year:"numeric"})}</span>
+            ${colecta.meta?`<span>Avance: ${Math.round(total/colecta.meta*100)}% de la meta</span>`:""}
+          </div>
+          <script>window.onload=()=>{window.print();}<\/script>
+          </body></html>`);
+          w.document.close();
+        }}>🖨️ Imprimir lista</button>
         <button style={btnSec} onClick={onClose}>Cerrar</button>
       </div>
     </div>
