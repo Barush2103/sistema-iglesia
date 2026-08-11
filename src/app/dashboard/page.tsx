@@ -189,7 +189,8 @@ function ColectaDetalle({ colecta, alumnos, onClose, onRefresh }: { colecta: Col
   const alumnosQueAportaron = new Set(colecta.aportaciones.filter(a=>a.alumnoId).map(a=>a.alumnoId!));
   const alumnosFiltrados = alumnos
     .filter(a => filtroNivel === "TODOS" || a.nivel === filtroNivel)
-    .filter(a => filtroDia === "TODOS" || a.dia === filtroDia);
+    .filter(a => filtroDia === "TODOS" || a.dia === filtroDia)
+    .sort((a,b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }));
   const pagaron = alumnosFiltrados.filter(a => alumnosQueAportaron.has(a.id));
   const noPagaron = alumnosFiltrados.filter(a => !alumnosQueAportaron.has(a.id));
   const diasDisponibles = [...new Set(
@@ -361,7 +362,8 @@ function ColectaDetalle({ colecta, alumnos, onClose, onRefresh }: { colecta: Col
 
 // ── Lista Imprimible ──────────────────────────────────────────────────────────
 function ListaImprimible({ alumnos, nivel, filtro }: { alumnos: Alumno[]; nivel: Nivel|"TODOS"; filtro: "documentos"|"pagos"|"contacto" }) {
-  const lista = nivel === "TODOS" ? alumnos : alumnos.filter(a=>a.nivel===nivel);
+  const lista = (nivel === "TODOS" ? alumnos : alumnos.filter(a=>a.nivel===nivel))
+    .sort((a,b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }));
   if (filtro === "contacto") {
     return (
       <div>
@@ -642,7 +644,8 @@ export default function Dashboard() {
 
   const alumnosFiltrados = alumnos
     .filter(a => filtroNivel === "TODOS" || a.nivel === filtroNivel)
-    .filter(a => !busqueda || a.nombre.toLowerCase().includes(busqueda.toLowerCase()) || (a.responsable||"").toLowerCase().includes(busqueda.toLowerCase()));
+    .filter(a => !busqueda || a.nombre.toLowerCase().includes(busqueda.toLowerCase()) || (a.responsable||"").toLowerCase().includes(busqueda.toLowerCase()))
+    .sort((a,b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }));
 
   const stats = {
     total: alumnos.length,

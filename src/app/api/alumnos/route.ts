@@ -19,7 +19,7 @@ export async function GET(req: NextRequest) {
     const nivel = req.nextUrl.searchParams.get("nivel") as Nivel | null;
     const alumnos = await prisma.alumno.findMany({
       where: nivel ? { nivel } : undefined,
-      orderBy: { nombre: "asc" },
+      orderBy: [{ nombre: "asc" }],
       include: { documentos: true, pagos: true },
     });
     return NextResponse.json(alumnos);
