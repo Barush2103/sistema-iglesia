@@ -496,74 +496,62 @@ function ListaImprimible({ alumnos, nivel, filtro }: { alumnos: Alumno[]; nivel:
 
 // ── Config Pines ──────────────────────────────────────────────────────────────
 function ConfigPines() {
+  const [pinSuperAdmin, setPinSuperAdmin] = useState("");
   const [pinAdmin, setPinAdmin] = useState("");
   const [pinConsulta, setPinConsulta] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{type:"ok"|"err", text:string}|null>(null);
-  const [showAdmin, setShowAdmin] = useState(false);
-  const [showConsulta, setShowConsulta] = useState(false);
+  const [show, setShow] = useState({ sa:false, a:false, c:false });
 
   useEffect(()=>{
     fetch("/api/config").then(r=>r.json()).then(d=>{
-      setPinAdmin(d.pinAdmin||""); setPinConsulta(d.pinConsulta||""); setLoading(false);
+      setPinSuperAdmin(d.pinSuperAdmin||""); setPinAdmin(d.pinAdmin||""); setPinConsulta(d.pinConsulta||""); setLoading(false);
     });
   },[]);
 
   async function guardar() {
-    if (!pinAdmin.trim() || !pinConsulta.trim()) return;
-    if (pinAdmin === pinConsulta) { setMsg({type:"err",text:"Los PINs deben ser diferentes"}); return; }
-    if (pinAdmin.length < 4 || pinConsulta.length < 4) { setMsg({type:"err",text:"Mínimo 4 caracteres cada PIN"}); return; }
+    const pines = [pinSuperAdmin, pinAdmin, pinConsulta];
+    if (pines.some(p=>!p.trim())) { setMsg({type:"err",text:"Todos los PINs son requeridos"}); return; }
+    if (pines.some(p=>p.length < 4)) { setMsg({type:"err",text:"Mínimo 4 caracteres por PIN"}); return; }
+    if (new Set(pines).size !== 3) { setMsg({type:"err",text:"Los 3 PINs deben ser diferentes entre sí"}); return; }
     setSaving(true); setMsg(null);
-    const res = await fetch("/api/config", { method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ pinAdmin, pinConsulta }) });
+    const res = await fetch("/api/config", { method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ pinSuperAdmin, pinAdmin, pinConsulta }) });
     const data = await res.json();
     setSaving(false);
-    if (data.ok) {
-      setMsg({type:"ok",text:"✓ PINs actualizados correctamente. La próxima vez que ingresen deberán usar los nuevos PINs."});
-    } else {
-      setMsg({type:"err",text:data.error||"Error al guardar"});
-    }
+    setMsg(data.ok ? {type:"ok",text:"✓ PINs actualizados. Aplican en el próximo inicio de sesión."} : {type:"err",text:data.error||"Error al guardar"});
   }
 
   if (loading) return <div style={{ color:"#9b9890",padding:"2rem" }}>Cargando...</div>;
+
+  const campos = [
+    { label:"PIN de Super Administrador", value:pinSuperAdmin, set:setPinSuperAdmin, showKey:"sa" as const, desc:"Acceso total + cambiar PINs" },
+    { label:"PIN de Administrador", value:pinAdmin, set:setPinAdmin, showKey:"a" as const, desc:"Catequesis, cooperaciones y listas — sin Config" },
+    { label:"PIN de Solo Lectura", value:pinConsulta, set:setPinConsulta, showKey:"c" as const, desc:"Solo puede ver e imprimir listas" },
+  ];
 
   return (
     <div style={{ maxWidth:440 }}>
       <div style={{ background:"#fff",border:"1px solid #e8e6e0",borderRadius:12,padding:"24px" }}>
         <div style={{ fontSize:15,fontWeight:600,marginBottom:4 }}>⚙️ Cambiar PINs de acceso</div>
-        <div style={{ fontSize:13,color:"#9b9890",marginBottom:24 }}>Los cambios aplican de inmediato. Las sesiones abiertas no se cierran solas.</div>
+        <div style={{ fontSize:13,color:"#9b9890",marginBottom:24 }}>Los cambios aplican en el próximo inicio de sesión.</div>
 
-        {/* PIN Admin */}
-        <div style={{ marginBottom:18 }}>
-          <label style={{ fontSize:12,fontWeight:500,color:"#6b6860",display:"block",marginBottom:6 }}>PIN de Administrador</label>
-          <div style={{ position:"relative" }}>
-            <input
-              type={showAdmin?"text":"password"}
-              value={pinAdmin}
-              onChange={e=>setPinAdmin(e.target.value)}
-              style={{...inputSt,paddingRight:44,letterSpacing:showAdmin?0:4}}
-              placeholder="Mínimo 4 caracteres"
-            />
-            <button onClick={()=>setShowAdmin(v=>!v)} style={{ position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#9b9890",fontSize:16 }}>{showAdmin?"🙈":"👁️"}</button>
+        {campos.map(({label,value,set,showKey,desc})=>(
+          <div key={showKey} style={{ marginBottom:18 }}>
+            <label style={{ fontSize:12,fontWeight:500,color:"#6b6860",display:"block",marginBottom:6 }}>{label}</label>
+            <div style={{ position:"relative" }}>
+              <input
+                type={show[showKey]?"text":"password"}
+                value={value}
+                onChange={e=>set(e.target.value)}
+                style={{...inputSt,paddingRight:44,letterSpacing:show[showKey]?0:4}}
+                placeholder="Mínimo 4 caracteres"
+              />
+              <button onClick={()=>setShow(s=>({...s,[showKey]:!s[showKey]}))} style={{ position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#9b9890",fontSize:16 }}>{show[showKey]?"🙈":"👁️"}</button>
+            </div>
+            <div style={{ fontSize:11,color:"#9b9890",marginTop:4 }}>{desc}</div>
           </div>
-          <div style={{ fontSize:11,color:"#9b9890",marginTop:4 }}>Acceso completo — catequesis, cooperaciones, listas y configuración</div>
-        </div>
-
-        {/* PIN Consulta */}
-        <div style={{ marginBottom:24 }}>
-          <label style={{ fontSize:12,fontWeight:500,color:"#6b6860",display:"block",marginBottom:6 }}>PIN de Solo Lectura</label>
-          <div style={{ position:"relative" }}>
-            <input
-              type={showConsulta?"text":"password"}
-              value={pinConsulta}
-              onChange={e=>setPinConsulta(e.target.value)}
-              style={{...inputSt,paddingRight:44,letterSpacing:showConsulta?0:4}}
-              placeholder="Mínimo 4 caracteres"
-            />
-            <button onClick={()=>setShowConsulta(v=>!v)} style={{ position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#9b9890",fontSize:16 }}>{showConsulta?"🙈":"👁️"}</button>
-          </div>
-          <div style={{ fontSize:11,color:"#9b9890",marginTop:4 }}>Solo puede ver e imprimir listas</div>
-        </div>
+        ))}
 
         {msg && (
           <div style={{ padding:"10px 14px",borderRadius:8,marginBottom:16,fontSize:13,background:msg.type==="ok"?"#f0fdf4":"#fef2f2",color:msg.type==="ok"?"#16a34a":"#dc2626",border:`1px solid ${msg.type==="ok"?"#bbf7d0":"#fecaca"}` }}>
@@ -571,7 +559,7 @@ function ConfigPines() {
           </div>
         )}
 
-        <button onClick={guardar} disabled={saving||!pinAdmin||!pinConsulta} style={{...btnPri,width:"100%",padding:"11px",fontSize:14,opacity:(saving||!pinAdmin||!pinConsulta)?0.5:1}}>
+        <button onClick={guardar} disabled={saving} style={{...btnPri,width:"100%",padding:"11px",fontSize:14,opacity:saving?0.5:1}}>
           {saving ? "Guardando..." : "Guardar PINs"}
         </button>
       </div>
@@ -580,9 +568,9 @@ function ConfigPines() {
         <div style={{ fontSize:12,fontWeight:500,color:"#b5883a",marginBottom:6 }}>💡 Recomendaciones</div>
         <div style={{ fontSize:12,color:"#6b6860",lineHeight:1.7 }}>
           • Usa PINs de 4 a 8 dígitos numéricos para facilidad en tablet<br/>
-          • Cambia el PIN de consulta periódicamente<br/>
-          • No compartas el PIN de administrador<br/>
-          • Si olvidas el PIN de admin, contacta al desarrollador
+          • Los 3 PINs deben ser distintos entre sí<br/>
+          • No compartas el PIN de Super Admin ni el de Admin<br/>
+          • Si olvidas el PIN de Super Admin, contacta al desarrollador
         </div>
       </div>
     </div>
@@ -605,7 +593,7 @@ export default function Dashboard() {
   const [impMostrar, setImpMostrar] = useState(false);
   const [newColecta, setNewColecta] = useState({ nombre:"", descripcion:"", meta:"" });
   const [loading, setLoading] = useState(true);
-  const [rol, setRol] = useState<"admin"|"consulta"|null>(null);
+  const [rol, setRol] = useState<"superadmin"|"admin"|"consulta"|null>(null);
 
   const load = useCallback(async () => {
     const [a,c] = await Promise.all([fetch("/api/alumnos").then(r=>r.json()), fetch("/api/colectas").then(r=>r.json())]);
@@ -622,7 +610,7 @@ export default function Dashboard() {
   }, [selAlumno, selColecta]);
 
   useEffect(()=>{
-    const r = sessionStorage.getItem("rol") as "admin"|"consulta"|null;
+    const r = sessionStorage.getItem("rol") as "superadmin"|"admin"|"consulta"|null;
     if (!r) { window.location.href = "/"; return; }
     setRol(r);
     if (r === "consulta") setSeccion("listas");
@@ -681,15 +669,17 @@ export default function Dashboard() {
         </div>
         <div style={{ display:"flex",alignItems:"center",gap:8 }}>
           <nav style={{ display:"flex",gap:4 }}>
-            {(rol === "admin"
+            {(rol === "superadmin"
               ? [["catequesis","📚 Catequesis"],["colectas","💰 Cooperaciones"],["listas","🖨️ Listas"],["config","⚙️ Config"]]
+              : rol === "admin"
+              ? [["catequesis","📚 Catequesis"],["colectas","💰 Cooperaciones"],["listas","🖨️ Listas"]]
               : [["listas","🖨️ Listas"]]
             ).map(([id,label])=>(
               <button key={id} onClick={()=>setSeccion(id as typeof seccion)} style={{ padding:"7px 14px",borderRadius:7,border:"none",background:seccion===id?"rgba(255,255,255,0.15)":"transparent",color:seccion===id?"#fff":"#9b9890",fontSize:13,cursor:"pointer",fontWeight:seccion===id?500:400 }}>{label}</button>
             ))}
           </nav>
           <div style={{ display:"flex",alignItems:"center",gap:8,marginLeft:8,paddingLeft:8,borderLeft:"1px solid rgba(255,255,255,0.1)" }}>
-            <span style={{ fontSize:11,padding:"3px 8px",borderRadius:20,background:rol==="admin"?"#b5883a":"#3b5bdb",color:"#fff",fontWeight:500 }}>{rol==="admin"?"Admin":"Solo lectura"}</span>
+            <span style={{ fontSize:11,padding:"3px 8px",borderRadius:20,background:rol==="superadmin"?"#7c3aed":rol==="admin"?"#b5883a":"#3b5bdb",color:"#fff",fontWeight:500 }}>{rol==="superadmin"?"Super Admin":rol==="admin"?"Admin":"Solo lectura"}</span>
             <button onClick={()=>{sessionStorage.clear();window.location.href="/";}} style={{ background:"none",border:"1px solid rgba(255,255,255,0.2)",borderRadius:6,color:"#9b9890",fontSize:12,padding:"5px 10px",cursor:"pointer" }}>Salir</button>
           </div>
         </div>
@@ -727,7 +717,7 @@ export default function Dashboard() {
                 <option value="TODOS">Todos los niveles</option>
                 {(Object.entries(NIVEL_LABEL) as [Nivel,string][]).map(([k,v])=><option key={k} value={k}>{v}</option>)}
               </select>
-              {rol==="admin" && <button style={btnPri} onClick={()=>{setEditAlumno(undefined);setModal("alumno");}}>+ Agregar alumno</button>}
+              {(rol==="admin" || rol==="superadmin") && <button style={btnPri} onClick={()=>{setEditAlumno(undefined);setModal("alumno");}}>+ Agregar alumno</button>}
             </div>
 
             {/* Lista alumnos */}
@@ -763,7 +753,7 @@ export default function Dashboard() {
                         {pagosPend === 0 && a.pagos.length > 0 && <span style={{ fontSize:11,padding:"3px 8px",borderRadius:20,background:"#f0fdf4",color:"#16a34a",fontWeight:500 }}>✓ Pagos</span>}
                       </div>
                       <div style={{ display:"flex",gap:4,flexShrink:0 }} onClick={e=>e.stopPropagation()}>
-                        {rol==="admin" && <>
+                        {(rol==="admin" || rol==="superadmin") && <>
                           <button onClick={()=>{setEditAlumno(a);setModal("alumno");}} style={{ background:"none",border:"none",color:"#9b9890",fontSize:16,cursor:"pointer",padding:"4px" }}>✏️</button>
                           <button onClick={()=>deleteAlumno(a.id)} style={{ background:"none",border:"none",color:"#9b9890",fontSize:16,cursor:"pointer",padding:"4px" }}>🗑️</button>
                         </>}
@@ -777,7 +767,7 @@ export default function Dashboard() {
         )}
 
         {/* ── COLECTAS ── */}
-        {seccion === "colectas" && rol === "admin" && (
+        {seccion === "colectas" && (rol === "admin" || rol === "superadmin") && (
           <>
             <div style={{ background:"#fff",border:"1px solid #e8e6e0",borderRadius:12,padding:"18px 20px",marginBottom:20 }}>
               <div style={{ fontSize:13,fontWeight:600,color:"#1c1c1a",marginBottom:14 }}>Nueva cooperación / colecta</div>
@@ -813,7 +803,7 @@ export default function Dashboard() {
                         {c.meta && <div style={{ fontSize:12,color:"#9b9890" }}>de ${c.meta.toLocaleString()} meta</div>}
                       </div>
                       <div style={{ display:"flex",flexDirection:"column",gap:6,flexShrink:0 }} onClick={e=>e.stopPropagation()}>
-                        {rol==="admin" && <>
+                        {(rol==="admin" || rol==="superadmin") && <>
                           <button onClick={()=>toggleColecta(c)} style={{ fontSize:11,padding:"4px 10px",borderRadius:6,border:"1px solid #e8e6e0",background:"transparent",color:"#6b6860",cursor:"pointer" }}>{c.activa?"Cerrar":"Reabrir"}</button>
                           <button onClick={()=>deleteColecta(c.id)} style={{ background:"none",border:"none",color:"#d1cfc8",fontSize:14,cursor:"pointer",textAlign:"right" }}>🗑️</button>
                         </>}
@@ -869,7 +859,7 @@ export default function Dashboard() {
         )}
 
         {/* ── CONFIG ── */}
-        {seccion === "config" && rol === "admin" && (
+        {seccion === "config" && rol === "superadmin" && (
           <ConfigPines />
         )}
       </main>

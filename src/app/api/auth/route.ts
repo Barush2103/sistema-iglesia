@@ -12,9 +12,11 @@ async function getPin(clave: string, fallback: string): Promise<string> {
 
 export async function POST(req: NextRequest) {
   const { pin } = await req.json();
+  const pinSuperAdmin = await getPin("PIN_SUPERADMIN", process.env.PIN_SUPERADMIN || "9999");
   const pinAdmin = await getPin("PIN_ADMIN", process.env.PIN_ADMIN || "1234");
   const pinConsulta = await getPin("PIN_CONSULTA", process.env.PIN_CONSULTA || "5678");
 
+  if (pin === pinSuperAdmin) return NextResponse.json({ rol: "superadmin" });
   if (pin === pinAdmin) return NextResponse.json({ rol: "admin" });
   if (pin === pinConsulta) return NextResponse.json({ rol: "consulta" });
   return NextResponse.json({ error: "PIN incorrecto" }, { status: 401 });
