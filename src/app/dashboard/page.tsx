@@ -232,7 +232,7 @@ function ColectaDetalle({ colecta, alumnos, onClose, onRefresh }: { colecta: Col
     w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${colecta.nombre}</title>
     <style>body{font-family:Arial,sans-serif;margin:30px;color:#1c1c1a;font-size:13px;}.header{text-align:center;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #1c1c1a;}.cruz{font-size:22px;margin-bottom:4px;}table{width:100%;border-collapse:collapse;margin-top:4px;}thead tr{background:#1c1c1a;color:#fff;}thead th{padding:9px 10px;text-align:left;font-size:12px;font-weight:600;}tbody tr:nth-child(even){background:#f9f8f6;}.total-row{background:#b5883a!important;color:#fff;font-weight:700;}.total-row td{padding:9px 10px;font-size:13px;}.footer{margin-top:16px;font-size:11px;color:#888;display:flex;justify-content:space-between;}@media print{body{margin:15px;}}</style>
     </head><body>
-    <div class="header"><div class="cruz">✝</div><h1 style="font-size:16px;font-weight:700;margin:0;">PARROQUIA MARÍA MADRE DE DIOS</h1><h2 style="font-size:13px;font-weight:400;margin:4px 0 0;">${colecta.nombre}</h2>${colecta.descripcion?`<div style="font-size:12px;color:#555;margin-top:6px;">${colecta.descripcion}</div>`:""}${colecta.meta?`<div style="font-size:12px;color:#555;margin-top:4px;">Meta: $${colecta.meta.toLocaleString("es-MX",{minimumFractionDigits:2})}</div>`:""}</div>
+    <div class="header"><div class="cruz"><img src="/logo.png" style="width:70px;height:auto;" alt="Logo"/></div><h1 style="font-size:16px;font-weight:700;margin:0;">PARROQUIA MARÍA MADRE DE DIOS</h1><h2 style="font-size:13px;font-weight:400;margin:4px 0 0;">${colecta.nombre}</h2>${colecta.descripcion?`<div style="font-size:12px;color:#555;margin-top:6px;">${colecta.descripcion}</div>`:""}${colecta.meta?`<div style="font-size:12px;color:#555;margin-top:4px;">Meta: $${colecta.meta.toLocaleString("es-MX",{minimumFractionDigits:2})}</div>`:""}</div>
     <table><thead><tr><th style="width:40px;text-align:center;">No.</th><th>Nombre</th><th style="width:120px;text-align:right;">Monto</th><th style="width:130px;text-align:center;">Fecha</th><th style="width:180px;">Notas</th></tr></thead>
     <tbody>${filas}<tr class="total-row"><td colspan="2" style="text-align:right;">TOTAL</td><td style="text-align:right;">$${total.toLocaleString("es-MX",{minimumFractionDigits:2})}</td><td colspan="2">${colecta.aportaciones.length} aportaciones</td></tr></tbody></table>
     <div class="footer"><span>Generado: ${new Date().toLocaleDateString("es-MX",{day:"numeric",month:"long",year:"numeric"})}</span>${colecta.meta?`<span>Avance: ${Math.round(total/colecta.meta*100)}% de la meta</span>`:""}</div>
@@ -370,6 +370,7 @@ function ListaImprimible({ alumnos, nivel, filtro }: { alumnos: Alumno[]; nivel:
         </div>
         <div style={{ fontFamily:"serif",fontSize:13,lineHeight:1.6 }}>
           <div style={{ textAlign:"center",marginBottom:16 }}>
+            <img src="/logo.png" alt="Logo" style={{ width:80,height:"auto",marginBottom:6 }} />
             <div style={{ fontSize:16,fontWeight:700 }}>PARROQUIA MARÍA MADRE DE DIOS</div>
             <div style={{ fontSize:14 }}>Catequesis 2026-2027 · {nivel==="TODOS"?"Todos los niveles":NIVEL_LABEL[nivel]}</div>
           </div>
@@ -411,6 +412,7 @@ function ListaImprimible({ alumnos, nivel, filtro }: { alumnos: Alumno[]; nivel:
         </div>
         <div style={{ fontFamily:"serif",fontSize:13 }}>
           <div style={{ textAlign:"center",marginBottom:16 }}>
+            <img src="/logo.png" alt="Logo" style={{ width:80,height:"auto",marginBottom:6 }} />
             <div style={{ fontSize:16,fontWeight:700 }}>PARROQUIA MARÍA MADRE DE DIOS</div>
             <div style={{ fontSize:14 }}>Control de Documentos · {nivel==="TODOS"?"Todos los niveles":NIVEL_LABEL[nivel]}</div>
           </div>
@@ -454,6 +456,7 @@ function ListaImprimible({ alumnos, nivel, filtro }: { alumnos: Alumno[]; nivel:
       </div>
       <div style={{ fontFamily:"serif",fontSize:13 }}>
         <div style={{ textAlign:"center",marginBottom:16 }}>
+          <img src="/logo.png" alt="Logo" style={{ width:80,height:"auto",marginBottom:6 }} />
           <div style={{ fontSize:16,fontWeight:700 }}>PARROQUIA MARÍA MADRE DE DIOS</div>
           <div style={{ fontSize:14 }}>Control de Pagos · {nivel==="TODOS"?"Todos los niveles":NIVEL_LABEL[nivel]}</div>
         </div>
@@ -670,7 +673,7 @@ export default function Dashboard() {
       {/* Header */}
       <header style={{ background:"#1c1c1a",color:"#fff",padding:"0 20px",height:56,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0 }} className="no-print">
         <div style={{ display:"flex",alignItems:"center",gap:10 }}>
-          <span style={{ fontSize:20 }}>✝</span>
+          <img src="/logo.png" alt="Logo" style={{ width:38,height:38,objectFit:"contain",filter:"brightness(0) invert(1)" }} />
           <div>
             <div style={{ fontWeight:600,fontSize:14,lineHeight:1.2 }}>Parroquia María Madre de Dios</div>
             <div style={{ fontSize:11,color:"#9b9890" }}>Sistema de Control · Catequesis 2026-2027</div>

@@ -31,7 +31,9 @@ export default function Login() {
   return (
     <div style={{ minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:"#f5f4f0" }}>
       <div style={{ background:"#fff",borderRadius:16,padding:"36px 32px",width:"100%",maxWidth:360,boxShadow:"0 4px 24px rgba(0,0,0,0.08)",textAlign:"center" }}>
-        <div style={{ fontSize:36,marginBottom:8 }}>✝</div>
+        <div style={{ fontSize:36,marginBottom:8 }}>
+          <img src="/logo.png" alt="Logo Parroquia" style={{ width:110,height:"auto" }} />
+        </div>
         <div style={{ fontWeight:700,fontSize:18,color:"#1c1c1a",marginBottom:4 }}>Parroquia María Madre de Dios</div>
         <div style={{ fontSize:13,color:"#9b9890",marginBottom:28 }}>Sistema de Catequesis 2026-2027</div>
 
