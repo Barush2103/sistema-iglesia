@@ -495,7 +495,7 @@ function ListaImprimible({ alumnos, nivel, filtro }: { alumnos: Alumno[]; nivel:
 export default function Dashboard() {
   const [alumnos, setAlumnos] = useState<Alumno[]>([]);
   const [colectas, setColectas] = useState<Colecta[]>([]);
-  const [seccion, setSeccion] = useState<"catequesis"|"colectas"|"listas">("catequesis");
+  const [seccion, setSeccion] = useState<"catequesis"|"colectas"|"listas">("listas");
   const [filtroNivel, setFiltroNivel] = useState<Nivel|"TODOS">("TODOS");
   const [busqueda, setBusqueda] = useState("");
   const [modal, setModal] = useState<null|"alumno"|"alumnoDetalle"|"colecta"|"colectaDetalle"|"imprimir">(null);
@@ -507,6 +507,7 @@ export default function Dashboard() {
   const [impMostrar, setImpMostrar] = useState(false);
   const [newColecta, setNewColecta] = useState({ nombre:"", descripcion:"", meta:"" });
   const [loading, setLoading] = useState(true);
+  const [rol, setRol] = useState<"admin"|"consulta"|null>(null);
 
   const load = useCallback(async () => {
     const [a,c] = await Promise.all([fetch("/api/alumnos").then(r=>r.json()), fetch("/api/colectas").then(r=>r.json())]);
@@ -522,7 +523,13 @@ export default function Dashboard() {
     if (selColecta) { const updated = (Array.isArray(c)?c:[]).find((x:Colecta)=>x.id===selColecta.id); if(updated) setSelColecta(updated); }
   }, [selAlumno, selColecta]);
 
-  useEffect(()=>{ load(); }, [load]);
+  useEffect(()=>{
+    const r = sessionStorage.getItem("rol") as "admin"|"consulta"|null;
+    if (!r) { window.location.href = "/"; return; }
+    setRol(r);
+    if (r === "consulta") setSeccion("listas");
+    load();
+  }, [load]);
 
   async function deleteAlumno(id: number) {
     if (!confirm("¿Eliminar este alumno y todos sus registros?")) return;
@@ -561,7 +568,7 @@ export default function Dashboard() {
     pagosPendientes: alumnos.reduce((s,a)=>s+a.pagos.filter(p=>!p.pagado).length,0),
   };
 
-  if (loading) return <div style={{ display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",flexDirection:"column",gap:8 }}><div style={{ fontSize:32 }}>✝</div><div style={{ color:"#9b9890" }}>Cargando sistema...</div></div>;
+  if (loading || !rol) return <div style={{ display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",flexDirection:"column",gap:8 }}><div style={{ fontSize:32 }}>✝</div><div style={{ color:"#9b9890" }}>Cargando sistema...</div></div>;
 
   return (
     <div style={{ minHeight:"100vh",background:"var(--bg)" }}>
@@ -574,11 +581,20 @@ export default function Dashboard() {
             <div style={{ fontSize:11,color:"#9b9890" }}>Sistema de Control · Catequesis 2026-2027</div>
           </div>
         </div>
-        <nav style={{ display:"flex",gap:4 }}>
-          {[["catequesis","📚 Catequesis"],["colectas","💰 Cooperaciones"],["listas","🖨️ Listas"]].map(([id,label])=>(
-            <button key={id} onClick={()=>setSeccion(id as typeof seccion)} style={{ padding:"7px 14px",borderRadius:7,border:"none",background:seccion===id?"rgba(255,255,255,0.15)":"transparent",color:seccion===id?"#fff":"#9b9890",fontSize:13,cursor:"pointer",fontWeight:seccion===id?500:400 }}>{label}</button>
-          ))}
-        </nav>
+        <div style={{ display:"flex",alignItems:"center",gap:8 }}>
+          <nav style={{ display:"flex",gap:4 }}>
+            {(rol === "admin"
+              ? [["catequesis","📚 Catequesis"],["colectas","💰 Cooperaciones"],["listas","🖨️ Listas"]]
+              : [["listas","🖨️ Listas"]]
+            ).map(([id,label])=>(
+              <button key={id} onClick={()=>setSeccion(id as typeof seccion)} style={{ padding:"7px 14px",borderRadius:7,border:"none",background:seccion===id?"rgba(255,255,255,0.15)":"transparent",color:seccion===id?"#fff":"#9b9890",fontSize:13,cursor:"pointer",fontWeight:seccion===id?500:400 }}>{label}</button>
+            ))}
+          </nav>
+          <div style={{ display:"flex",alignItems:"center",gap:8,marginLeft:8,paddingLeft:8,borderLeft:"1px solid rgba(255,255,255,0.1)" }}>
+            <span style={{ fontSize:11,padding:"3px 8px",borderRadius:20,background:rol==="admin"?"#b5883a":"#3b5bdb",color:"#fff",fontWeight:500 }}>{rol==="admin"?"Admin":"Solo lectura"}</span>
+            <button onClick={()=>{sessionStorage.clear();window.location.href="/";}} style={{ background:"none",border:"1px solid rgba(255,255,255,0.2)",borderRadius:6,color:"#9b9890",fontSize:12,padding:"5px 10px",cursor:"pointer" }}>Salir</button>
+          </div>
+        </div>
       </header>
 
       <main style={{ padding:20,maxWidth:1100,margin:"0 auto" }}>
@@ -613,7 +629,7 @@ export default function Dashboard() {
                 <option value="TODOS">Todos los niveles</option>
                 {(Object.entries(NIVEL_LABEL) as [Nivel,string][]).map(([k,v])=><option key={k} value={k}>{v}</option>)}
               </select>
-              <button style={btnPri} onClick={()=>{setEditAlumno(undefined);setModal("alumno");}}>+ Agregar alumno</button>
+              {rol==="admin" && <button style={btnPri} onClick={()=>{setEditAlumno(undefined);setModal("alumno");}}>+ Agregar alumno</button>}
             </div>
 
             {/* Lista alumnos */}
@@ -649,8 +665,10 @@ export default function Dashboard() {
                         {pagosPend === 0 && a.pagos.length > 0 && <span style={{ fontSize:11,padding:"3px 8px",borderRadius:20,background:"#f0fdf4",color:"#16a34a",fontWeight:500 }}>✓ Pagos</span>}
                       </div>
                       <div style={{ display:"flex",gap:4,flexShrink:0 }} onClick={e=>e.stopPropagation()}>
-                        <button onClick={()=>{setEditAlumno(a);setModal("alumno");}} style={{ background:"none",border:"none",color:"#9b9890",fontSize:16,cursor:"pointer",padding:"4px" }}>✏️</button>
-                        <button onClick={()=>deleteAlumno(a.id)} style={{ background:"none",border:"none",color:"#9b9890",fontSize:16,cursor:"pointer",padding:"4px" }}>🗑️</button>
+                        {rol==="admin" && <>
+                          <button onClick={()=>{setEditAlumno(a);setModal("alumno");}} style={{ background:"none",border:"none",color:"#9b9890",fontSize:16,cursor:"pointer",padding:"4px" }}>✏️</button>
+                          <button onClick={()=>deleteAlumno(a.id)} style={{ background:"none",border:"none",color:"#9b9890",fontSize:16,cursor:"pointer",padding:"4px" }}>🗑️</button>
+                        </>}
                       </div>
                     </div>
                   );
@@ -661,7 +679,7 @@ export default function Dashboard() {
         )}
 
         {/* ── COLECTAS ── */}
-        {seccion === "colectas" && (
+        {seccion === "colectas" && rol === "admin" && (
           <>
             <div style={{ background:"#fff",border:"1px solid #e8e6e0",borderRadius:12,padding:"18px 20px",marginBottom:20 }}>
               <div style={{ fontSize:13,fontWeight:600,color:"#1c1c1a",marginBottom:14 }}>Nueva cooperación / colecta</div>
@@ -697,8 +715,10 @@ export default function Dashboard() {
                         {c.meta && <div style={{ fontSize:12,color:"#9b9890" }}>de ${c.meta.toLocaleString()} meta</div>}
                       </div>
                       <div style={{ display:"flex",flexDirection:"column",gap:6,flexShrink:0 }} onClick={e=>e.stopPropagation()}>
-                        <button onClick={()=>toggleColecta(c)} style={{ fontSize:11,padding:"4px 10px",borderRadius:6,border:"1px solid #e8e6e0",background:"transparent",color:"#6b6860",cursor:"pointer" }}>{c.activa?"Cerrar":"Reabrir"}</button>
-                        <button onClick={()=>deleteColecta(c.id)} style={{ background:"none",border:"none",color:"#d1cfc8",fontSize:14,cursor:"pointer",textAlign:"right" }}>🗑️</button>
+                        {rol==="admin" && <>
+                          <button onClick={()=>toggleColecta(c)} style={{ fontSize:11,padding:"4px 10px",borderRadius:6,border:"1px solid #e8e6e0",background:"transparent",color:"#6b6860",cursor:"pointer" }}>{c.activa?"Cerrar":"Reabrir"}</button>
+                          <button onClick={()=>deleteColecta(c.id)} style={{ background:"none",border:"none",color:"#d1cfc8",fontSize:14,cursor:"pointer",textAlign:"right" }}>🗑️</button>
+                        </>}
                       </div>
                     </div>
                   );
