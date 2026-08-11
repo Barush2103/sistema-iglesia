@@ -491,11 +491,106 @@ function ListaImprimible({ alumnos, nivel, filtro }: { alumnos: Alumno[]; nivel:
   );
 }
 
+// ── Config Pines ──────────────────────────────────────────────────────────────
+function ConfigPines() {
+  const [pinAdmin, setPinAdmin] = useState("");
+  const [pinConsulta, setPinConsulta] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{type:"ok"|"err", text:string}|null>(null);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [showConsulta, setShowConsulta] = useState(false);
+
+  useEffect(()=>{
+    fetch("/api/config").then(r=>r.json()).then(d=>{
+      setPinAdmin(d.pinAdmin||""); setPinConsulta(d.pinConsulta||""); setLoading(false);
+    });
+  },[]);
+
+  async function guardar() {
+    if (!pinAdmin.trim() || !pinConsulta.trim()) return;
+    if (pinAdmin === pinConsulta) { setMsg({type:"err",text:"Los PINs deben ser diferentes"}); return; }
+    if (pinAdmin.length < 4 || pinConsulta.length < 4) { setMsg({type:"err",text:"Mínimo 4 caracteres cada PIN"}); return; }
+    setSaving(true); setMsg(null);
+    const res = await fetch("/api/config", { method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ pinAdmin, pinConsulta }) });
+    const data = await res.json();
+    setSaving(false);
+    if (data.ok) {
+      setMsg({type:"ok",text:"✓ PINs actualizados correctamente. La próxima vez que ingresen deberán usar los nuevos PINs."});
+    } else {
+      setMsg({type:"err",text:data.error||"Error al guardar"});
+    }
+  }
+
+  if (loading) return <div style={{ color:"#9b9890",padding:"2rem" }}>Cargando...</div>;
+
+  return (
+    <div style={{ maxWidth:440 }}>
+      <div style={{ background:"#fff",border:"1px solid #e8e6e0",borderRadius:12,padding:"24px" }}>
+        <div style={{ fontSize:15,fontWeight:600,marginBottom:4 }}>⚙️ Cambiar PINs de acceso</div>
+        <div style={{ fontSize:13,color:"#9b9890",marginBottom:24 }}>Los cambios aplican de inmediato. Las sesiones abiertas no se cierran solas.</div>
+
+        {/* PIN Admin */}
+        <div style={{ marginBottom:18 }}>
+          <label style={{ fontSize:12,fontWeight:500,color:"#6b6860",display:"block",marginBottom:6 }}>PIN de Administrador</label>
+          <div style={{ position:"relative" }}>
+            <input
+              type={showAdmin?"text":"password"}
+              value={pinAdmin}
+              onChange={e=>setPinAdmin(e.target.value)}
+              style={{...inputSt,paddingRight:44,letterSpacing:showAdmin?0:4}}
+              placeholder="Mínimo 4 caracteres"
+            />
+            <button onClick={()=>setShowAdmin(v=>!v)} style={{ position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#9b9890",fontSize:16 }}>{showAdmin?"🙈":"👁️"}</button>
+          </div>
+          <div style={{ fontSize:11,color:"#9b9890",marginTop:4 }}>Acceso completo — catequesis, cooperaciones, listas y configuración</div>
+        </div>
+
+        {/* PIN Consulta */}
+        <div style={{ marginBottom:24 }}>
+          <label style={{ fontSize:12,fontWeight:500,color:"#6b6860",display:"block",marginBottom:6 }}>PIN de Solo Lectura</label>
+          <div style={{ position:"relative" }}>
+            <input
+              type={showConsulta?"text":"password"}
+              value={pinConsulta}
+              onChange={e=>setPinConsulta(e.target.value)}
+              style={{...inputSt,paddingRight:44,letterSpacing:showConsulta?0:4}}
+              placeholder="Mínimo 4 caracteres"
+            />
+            <button onClick={()=>setShowConsulta(v=>!v)} style={{ position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",cursor:"pointer",color:"#9b9890",fontSize:16 }}>{showConsulta?"🙈":"👁️"}</button>
+          </div>
+          <div style={{ fontSize:11,color:"#9b9890",marginTop:4 }}>Solo puede ver e imprimir listas</div>
+        </div>
+
+        {msg && (
+          <div style={{ padding:"10px 14px",borderRadius:8,marginBottom:16,fontSize:13,background:msg.type==="ok"?"#f0fdf4":"#fef2f2",color:msg.type==="ok"?"#16a34a":"#dc2626",border:`1px solid ${msg.type==="ok"?"#bbf7d0":"#fecaca"}` }}>
+            {msg.text}
+          </div>
+        )}
+
+        <button onClick={guardar} disabled={saving||!pinAdmin||!pinConsulta} style={{...btnPri,width:"100%",padding:"11px",fontSize:14,opacity:(saving||!pinAdmin||!pinConsulta)?0.5:1}}>
+          {saving ? "Guardando..." : "Guardar PINs"}
+        </button>
+      </div>
+
+      <div style={{ background:"#fdf8f0",border:"1px solid #b5883a33",borderRadius:10,padding:"14px 16px",marginTop:14 }}>
+        <div style={{ fontSize:12,fontWeight:500,color:"#b5883a",marginBottom:6 }}>💡 Recomendaciones</div>
+        <div style={{ fontSize:12,color:"#6b6860",lineHeight:1.7 }}>
+          • Usa PINs de 4 a 8 dígitos numéricos para facilidad en tablet<br/>
+          • Cambia el PIN de consulta periódicamente<br/>
+          • No compartas el PIN de administrador<br/>
+          • Si olvidas el PIN de admin, contacta al desarrollador
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Main ──────────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [alumnos, setAlumnos] = useState<Alumno[]>([]);
   const [colectas, setColectas] = useState<Colecta[]>([]);
-  const [seccion, setSeccion] = useState<"catequesis"|"colectas"|"listas">("listas");
+  const [seccion, setSeccion] = useState<"catequesis"|"colectas"|"listas"|"config">("listas");
   const [filtroNivel, setFiltroNivel] = useState<Nivel|"TODOS">("TODOS");
   const [busqueda, setBusqueda] = useState("");
   const [modal, setModal] = useState<null|"alumno"|"alumnoDetalle"|"colecta"|"colectaDetalle"|"imprimir">(null);
@@ -584,7 +679,7 @@ export default function Dashboard() {
         <div style={{ display:"flex",alignItems:"center",gap:8 }}>
           <nav style={{ display:"flex",gap:4 }}>
             {(rol === "admin"
-              ? [["catequesis","📚 Catequesis"],["colectas","💰 Cooperaciones"],["listas","🖨️ Listas"]]
+              ? [["catequesis","📚 Catequesis"],["colectas","💰 Cooperaciones"],["listas","🖨️ Listas"],["config","⚙️ Config"]]
               : [["listas","🖨️ Listas"]]
             ).map(([id,label])=>(
               <button key={id} onClick={()=>setSeccion(id as typeof seccion)} style={{ padding:"7px 14px",borderRadius:7,border:"none",background:seccion===id?"rgba(255,255,255,0.15)":"transparent",color:seccion===id?"#fff":"#9b9890",fontSize:13,cursor:"pointer",fontWeight:seccion===id?500:400 }}>{label}</button>
@@ -768,6 +863,11 @@ export default function Dashboard() {
               </div>
             )}
           </>
+        )}
+
+        {/* ── CONFIG ── */}
+        {seccion === "config" && rol === "admin" && (
+          <ConfigPines />
         )}
       </main>
 
