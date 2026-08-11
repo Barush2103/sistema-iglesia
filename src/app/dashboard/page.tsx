@@ -6,7 +6,7 @@ type Nivel = "PRECOMUNION"|"COMUNION"|"PRECONFIRMACION"|"CONFIRMACION";
 type Documento = { id: number; tipo: string; entregado: boolean; fecha?: string; notas?: string };
 type Pago = { id: number; tipo: string; monto?: number; pagado: boolean; fecha?: string; notas?: string };
 type Alumno = { id: number; nombre: string; nivel: Nivel; catequista?: string; dia?: string; responsable?: string; telefonoCasa?: string; telefonoCelular?: string; documentos: Documento[]; pagos: Pago[] };
-type Aportacion = { id: number; nombre: string; monto: number; notas?: string; fecha: string };
+type Aportacion = { id: number; nombre: string; monto: number; notas?: string; fecha: string; alumnoId?: number };
 type Colecta = { id: number; nombre: string; descripcion?: string; meta?: number; activa: boolean; aportaciones: Aportacion[]; _count: { aportaciones: number } };
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -152,19 +152,64 @@ function AlumnoDetalle({ alumno, onClose, onRefresh }: { alumno: Alumno; onClose
   );
 }
 
-// ── Colecta Modal ─────────────────────────────────────────────────────────────
-function ColectaDetalle({ colecta, onClose, onRefresh }: { colecta: Colecta; onClose: () => void; onRefresh: () => void }) {
-  const [nombre, setNombre] = useState("");
+// ── Mini modal para capturar monto ───────────────────────────────────────────
+function MontoModal({ alumno, onConfirm, onClose }: { alumno: Alumno; onConfirm: (monto: number, notas: string) => void; onClose: () => void }) {
   const [monto, setMonto] = useState("");
   const [notas, setNotas] = useState("");
-  const [loading, setLoading] = useState(false);
+  return (
+    <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.5)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",padding:16 }} onClick={onClose}>
+      <div style={{ background:"#fff",borderRadius:12,padding:22,width:"100%",maxWidth:340,boxShadow:"0 20px 60px rgba(0,0,0,0.2)" }} onClick={e=>e.stopPropagation()}>
+        <div style={{ fontWeight:600,fontSize:15,marginBottom:4 }}>Registrar aportación</div>
+        <div style={{ fontSize:13,color:"#6b6860",marginBottom:16 }}>{alumno.nombre}</div>
+        <div style={{ marginBottom:10 }}>
+          <label style={{ fontSize:12,color:"#6b6860",display:"block",marginBottom:5 }}>Monto *</label>
+          <input autoFocus style={{...inputSt,fontSize:18,fontWeight:600,textAlign:"center"}} type="number" value={monto} onChange={e=>setMonto(e.target.value)} placeholder="$0" onKeyDown={e=>e.key==="Enter"&&monto&&onConfirm(Number(monto),notas)} />
+        </div>
+        <div style={{ marginBottom:16 }}>
+          <label style={{ fontSize:12,color:"#6b6860",display:"block",marginBottom:5 }}>Notas (opcional)</label>
+          <input style={inputSt} value={notas} onChange={e=>setNotas(e.target.value)} placeholder="Abono, observación..." />
+        </div>
+        <div style={{ display:"flex",gap:8 }}>
+          <button style={{...btnSec,flex:1}} onClick={onClose}>Cancelar</button>
+          <button style={{...btnGold,flex:1}} onClick={()=>monto&&onConfirm(Number(monto),notas)} disabled={!monto}>Confirmar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Colecta Modal ─────────────────────────────────────────────────────────────
+function ColectaDetalle({ colecta, alumnos, onClose, onRefresh }: { colecta: Colecta; alumnos: Alumno[]; onClose: () => void; onRefresh: () => void }) {
+  const [vista, setVista] = useState<"grupos"|"lista">("grupos");
+  const [filtroNivel, setFiltroNivel] = useState<Nivel|"TODOS">("TODOS");
+  const [filtroDia, setFiltroDia] = useState<string>("TODOS");
+  const [alumnoSel, setAlumnoSel] = useState<Alumno|undefined>();
   const total = colecta.aportaciones.reduce((s, a) => s + a.monto, 0);
 
-  async function agregar() {
-    if (!nombre.trim() || !monto) return;
-    setLoading(true);
-    await fetch(`/api/colectas/${colecta.id}/aportaciones`, { method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ nombre, monto: Number(monto), notas }) });
-    setNombre(""); setMonto(""); setNotas(""); setLoading(false); onRefresh();
+  const alumnosQueAportaron = new Set(colecta.aportaciones.filter(a=>a.alumnoId).map(a=>a.alumnoId!));
+  const alumnosFiltrados = alumnos
+    .filter(a => filtroNivel === "TODOS" || a.nivel === filtroNivel)
+    .filter(a => filtroDia === "TODOS" || a.dia === filtroDia);
+  const pagaron = alumnosFiltrados.filter(a => alumnosQueAportaron.has(a.id));
+  const noPagaron = alumnosFiltrados.filter(a => !alumnosQueAportaron.has(a.id));
+  const diasDisponibles = [...new Set(
+    alumnos.filter(a => filtroNivel === "TODOS" || a.nivel === filtroNivel)
+      .map(a => a.dia).filter(Boolean)
+  )].sort() as string[];
+
+  async function registrar(alumno: Alumno, monto: number, notas: string) {
+    await fetch(`/api/colectas/${colecta.id}/aportaciones`, {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ nombre: alumno.nombre, monto, alumnoId: alumno.id, notas })
+    });
+    setAlumnoSel(undefined); onRefresh();
+  }
+
+  async function quitar(alumnoId: number) {
+    const ap = colecta.aportaciones.find(a => a.alumnoId === alumnoId);
+    if (!ap || !confirm("¿Quitar esta aportación?")) return;
+    await fetch(`/api/colectas/${colecta.id}/aportaciones`, { method:"DELETE", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ aportacionId: ap.id }) });
+    onRefresh();
   }
 
   async function eliminar(aportacionId: number) {
@@ -173,122 +218,141 @@ function ColectaDetalle({ colecta, onClose, onRefresh }: { colecta: Colecta; onC
     onRefresh();
   }
 
+  const printFn = () => {
+    const w = window.open("","_blank","width=800,height=600");
+    if (!w) return;
+    const filas = colecta.aportaciones.map((a,i)=>`
+      <tr style="border-bottom:1px solid #ddd;">
+        <td style="padding:7px 10px;text-align:center;">${i+1}</td>
+        <td style="padding:7px 10px;font-weight:500;">${a.nombre}</td>
+        <td style="padding:7px 10px;text-align:right;font-weight:600;">$${a.monto.toLocaleString("es-MX",{minimumFractionDigits:2})}</td>
+        <td style="padding:7px 10px;text-align:center;">${new Date(a.fecha).toLocaleDateString("es-MX",{day:"numeric",month:"long",year:"numeric"})}</td>
+        <td style="padding:7px 10px;color:#666;">${a.notas||""}</td>
+      </tr>`).join("");
+    w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${colecta.nombre}</title>
+    <style>body{font-family:Arial,sans-serif;margin:30px;color:#1c1c1a;font-size:13px;}.header{text-align:center;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #1c1c1a;}.cruz{font-size:22px;margin-bottom:4px;}table{width:100%;border-collapse:collapse;margin-top:4px;}thead tr{background:#1c1c1a;color:#fff;}thead th{padding:9px 10px;text-align:left;font-size:12px;font-weight:600;}tbody tr:nth-child(even){background:#f9f8f6;}.total-row{background:#b5883a!important;color:#fff;font-weight:700;}.total-row td{padding:9px 10px;font-size:13px;}.footer{margin-top:16px;font-size:11px;color:#888;display:flex;justify-content:space-between;}@media print{body{margin:15px;}}</style>
+    </head><body>
+    <div class="header"><div class="cruz">✝</div><h1 style="font-size:16px;font-weight:700;margin:0;">PARROQUIA MARÍA MADRE DE DIOS</h1><h2 style="font-size:13px;font-weight:400;margin:4px 0 0;">${colecta.nombre}</h2>${colecta.descripcion?`<div style="font-size:12px;color:#555;margin-top:6px;">${colecta.descripcion}</div>`:""}${colecta.meta?`<div style="font-size:12px;color:#555;margin-top:4px;">Meta: $${colecta.meta.toLocaleString("es-MX",{minimumFractionDigits:2})}</div>`:""}</div>
+    <table><thead><tr><th style="width:40px;text-align:center;">No.</th><th>Nombre</th><th style="width:120px;text-align:right;">Monto</th><th style="width:130px;text-align:center;">Fecha</th><th style="width:180px;">Notas</th></tr></thead>
+    <tbody>${filas}<tr class="total-row"><td colspan="2" style="text-align:right;">TOTAL</td><td style="text-align:right;">$${total.toLocaleString("es-MX",{minimumFractionDigits:2})}</td><td colspan="2">${colecta.aportaciones.length} aportaciones</td></tr></tbody></table>
+    <div class="footer"><span>Generado: ${new Date().toLocaleDateString("es-MX",{day:"numeric",month:"long",year:"numeric"})}</span>${colecta.meta?`<span>Avance: ${Math.round(total/colecta.meta*100)}% de la meta</span>`:""}</div>
+    <script>window.onload=()=>{window.print();}<\/script></body></html>`);
+    w.document.close();
+  };
+
   return (
     <div>
+      {alumnoSel && <MontoModal alumno={alumnoSel} onConfirm={(m,n)=>registrar(alumnoSel,m,n)} onClose={()=>setAlumnoSel(undefined)} />}
+
       {/* Resumen */}
-      <div style={{ background:"#fdf8f0",border:"1px solid #b5883a33",borderRadius:10,padding:"14px 18px",marginBottom:18,display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+      <div style={{ background:"#fdf8f0",border:"1px solid #b5883a33",borderRadius:10,padding:"14px 18px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center" }}>
         <div>
-          <div style={{ fontSize:13,color:"#6b6860" }}>{colecta.descripcion||"Cooperación espontánea"}</div>
-          <div style={{ fontSize:24,fontWeight:700,color:"#b5883a",marginTop:2 }}>${total.toLocaleString("es-MX",{minimumFractionDigits:2})}</div>
-          <div style={{ fontSize:12,color:"#9b9890" }}>{colecta.aportaciones.length} aportaciones</div>
+          <div style={{ fontSize:12,color:"#6b6860" }}>{colecta.descripcion||"Cooperación espontánea"}</div>
+          <div style={{ fontSize:26,fontWeight:700,color:"#b5883a",marginTop:2 }}>${total.toLocaleString("es-MX",{minimumFractionDigits:2})}</div>
+          <div style={{ fontSize:12,color:"#9b9890" }}>{colecta.aportaciones.length} aportaciones · {pagaron.length}/{alumnosFiltrados.length} en grupo seleccionado</div>
         </div>
         {colecta.meta && (
           <div style={{ textAlign:"right" }}>
             <div style={{ fontSize:12,color:"#6b6860" }}>Meta: ${colecta.meta.toLocaleString()}</div>
-            <div style={{ fontSize:18,fontWeight:600,color: total>=colecta.meta?"#16a34a":"#b5883a" }}>{Math.round(total/colecta.meta*100)}%</div>
+            <div style={{ fontSize:18,fontWeight:600,color:total>=colecta.meta?"#16a34a":"#b5883a" }}>{Math.round(total/colecta.meta*100)}%</div>
             <div style={{ width:100,height:6,background:"#e8e6e0",borderRadius:3,marginTop:4 }}><div style={{ height:"100%",background:total>=colecta.meta?"#16a34a":"#b5883a",borderRadius:3,width:`${Math.min(100,Math.round(total/colecta.meta*100))}%` }} /></div>
           </div>
         )}
       </div>
 
-      {/* Agregar aportación */}
-      <div style={{ background:"#f5f4f0",borderRadius:10,padding:"14px 16px",marginBottom:18 }}>
-        <div style={{ fontSize:12,fontWeight:600,color:"#9b9890",letterSpacing:"0.05em",marginBottom:10 }}>REGISTRAR APORTACIÓN</div>
-        <div style={{ display:"grid",gridTemplateColumns:"1fr auto",gap:8,marginBottom:8 }}>
-          <input style={inputSt} value={nombre} onChange={e=>setNombre(e.target.value)} placeholder="Nombre de quien aporta" onKeyDown={e=>e.key==="Enter"&&agregar()} />
-          <input style={{...inputSt,width:110}} type="number" value={monto} onChange={e=>setMonto(e.target.value)} placeholder="$ Monto" onKeyDown={e=>e.key==="Enter"&&agregar()} />
-        </div>
-        <div style={{ display:"grid",gridTemplateColumns:"1fr auto",gap:8 }}>
-          <input style={inputSt} value={notas} onChange={e=>setNotas(e.target.value)} placeholder="Notas opcionales..." />
-          <button style={btnGold} onClick={agregar} disabled={loading}>+ Agregar</button>
-        </div>
+      {/* Tabs */}
+      <div style={{ display:"flex",gap:4,background:"#f5f4f0",borderRadius:8,padding:4,marginBottom:14 }}>
+        {([["grupos","👥 Por grupo"],["lista","📋 Lista completa"]] as const).map(([id,label])=>(
+          <button key={id} onClick={()=>setVista(id)} style={{ flex:1,padding:"7px 12px",borderRadius:6,border:"none",background:vista===id?"#fff":"transparent",color:vista===id?"#1c1c1a":"#6b6860",fontSize:13,fontWeight:vista===id?500:400,cursor:"pointer",boxShadow:vista===id?"0 1px 3px rgba(0,0,0,0.08)":"none" }}>{label}</button>
+        ))}
       </div>
 
-      {/* Lista aportaciones */}
-      <div style={{ fontSize:12,fontWeight:600,color:"#9b9890",letterSpacing:"0.05em",marginBottom:10 }}>LISTA DE APORTACIONES</div>
-      {colecta.aportaciones.length === 0 ? (
-        <div style={{ textAlign:"center",padding:"2rem",color:"#9b9890",background:"#fafaf9",borderRadius:10,border:"1px dashed #e8e6e0" }}>Aún no hay aportaciones registradas</div>
-      ) : (
-        <div style={{ display:"flex",flexDirection:"column",gap:6,maxHeight:280,overflowY:"auto" }}>
-          {colecta.aportaciones.map((a,i) => (
-            <div key={a.id} style={{ display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:8,background:"#fafaf9",border:"1px solid #e8e6e0" }}>
-              <span style={{ fontSize:12,color:"#9b9890",width:24,flexShrink:0 }}>{i+1}</span>
-              <span style={{ flex:1,fontSize:13,fontWeight:500 }}>{a.nombre}</span>
-              {a.notas && <span style={{ fontSize:11,color:"#9b9890",flex:1 }}>{a.notas}</span>}
-              <span style={{ fontSize:13,fontWeight:600,color:"#b5883a",flexShrink:0 }}>${a.monto.toLocaleString()}</span>
-              <span style={{ fontSize:11,color:"#9b9890",flexShrink:0 }}>{new Date(a.fecha).toLocaleDateString("es-MX",{day:"numeric",month:"short"})}</span>
-              <button onClick={()=>eliminar(a.id)} style={{ background:"none",border:"none",color:"#d1cfc8",fontSize:15,cursor:"pointer",padding:"2px" }}>✕</button>
+      {/* Vista por grupo */}
+      {vista === "grupos" && (
+        <>
+          <div style={{ display:"flex",gap:8,marginBottom:14,flexWrap:"wrap",alignItems:"center" }}>
+            <select style={{...inputSt,maxWidth:170}} value={filtroNivel} onChange={e=>{setFiltroNivel(e.target.value as Nivel|"TODOS");setFiltroDia("TODOS");}}>
+              <option value="TODOS">Todos los niveles</option>
+              {(Object.entries(NIVEL_LABEL) as [Nivel,string][]).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+            </select>
+            <select style={{...inputSt,maxWidth:140}} value={filtroDia} onChange={e=>setFiltroDia(e.target.value)}>
+              <option value="TODOS">Todos los días</option>
+              {diasDisponibles.map(d=><option key={d} value={d}>{d}</option>)}
+            </select>
+            <span style={{ fontSize:12 }}><span style={{ color:"#16a34a",fontWeight:600 }}>{pagaron.length} pagaron</span> · <span style={{ color:"#dc2626",fontWeight:600 }}>{noPagaron.length} pendientes</span></span>
+          </div>
+
+          {noPagaron.length > 0 && (
+            <div style={{ marginBottom:14 }}>
+              <div style={{ fontSize:11,fontWeight:600,color:"#dc2626",letterSpacing:"0.05em",marginBottom:8 }}>PENDIENTES — {noPagaron.length}</div>
+              <div style={{ display:"flex",flexDirection:"column",gap:6,maxHeight:200,overflowY:"auto" }}>
+                {noPagaron.map(a=>(
+                  <div key={a.id} onClick={()=>setAlumnoSel(a)} style={{ display:"flex",alignItems:"center",gap:12,padding:"10px 14px",borderRadius:9,border:"1px solid #e8e6e0",background:"#fafaf9",cursor:"pointer" }}
+                    onMouseEnter={e=>{e.currentTarget.style.borderColor="#b5883a";e.currentTarget.style.background="#fdf8f0";}}
+                    onMouseLeave={e=>{e.currentTarget.style.borderColor="#e8e6e0";e.currentTarget.style.background="#fafaf9";}}>
+                    <div style={{ width:32,height:32,borderRadius:"50%",background:NIVEL_BG[a.nivel],border:`1.5px dashed ${NIVEL_COLOR[a.nivel]}88`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:600,color:NIVEL_COLOR[a.nivel],flexShrink:0 }}>{a.nombre.charAt(0)}</div>
+                    <div style={{ flex:1,minWidth:0 }}>
+                      <div style={{ fontSize:13,fontWeight:500,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{a.nombre}</div>
+                      <div style={{ fontSize:11,color:"#9b9890" }}>{NIVEL_LABEL[a.nivel]}{a.dia?` · ${a.dia}`:""}</div>
+                    </div>
+                    <span style={{ fontSize:12,color:"#b5883a",fontWeight:500,flexShrink:0 }}>Registrar →</span>
+                  </div>
+                ))}
+              </div>
             </div>
-          ))}
-        </div>
+          )}
+
+          {pagaron.length > 0 && (
+            <div>
+              <div style={{ fontSize:11,fontWeight:600,color:"#16a34a",letterSpacing:"0.05em",marginBottom:8 }}>YA PAGARON — {pagaron.length}</div>
+              <div style={{ display:"flex",flexDirection:"column",gap:6,maxHeight:200,overflowY:"auto" }}>
+                {pagaron.map(a=>{
+                  const ap = colecta.aportaciones.find(x=>x.alumnoId===a.id);
+                  return (
+                    <div key={a.id} style={{ display:"flex",alignItems:"center",gap:12,padding:"10px 14px",borderRadius:9,border:"1px solid #16a34a33",background:"#f0fdf4" }}>
+                      <div style={{ width:32,height:32,borderRadius:"50%",background:"#16a34a",display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,color:"#fff",flexShrink:0 }}>✓</div>
+                      <div style={{ flex:1,minWidth:0 }}>
+                        <div style={{ fontSize:13,fontWeight:500,color:"#15803d",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{a.nombre}</div>
+                        <div style={{ fontSize:11,color:"#6b9e78" }}>{NIVEL_LABEL[a.nivel]}{a.dia?` · ${a.dia}`:""}{ap?.notas?` · ${ap.notas}`:""}</div>
+                      </div>
+                      <span style={{ fontSize:14,fontWeight:700,color:"#16a34a",flexShrink:0 }}>${ap?.monto.toLocaleString()}</span>
+                      <button onClick={()=>quitar(a.id)} style={{ background:"none",border:"none",color:"#d1cfc8",fontSize:14,cursor:"pointer",padding:"3px",flexShrink:0 }}>✕</button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {alumnosFiltrados.length === 0 && <div style={{ textAlign:"center",padding:"2rem",color:"#9b9890",background:"#fafaf9",borderRadius:10,border:"1px dashed #e8e6e0" }}>No hay alumnos en este grupo</div>}
+        </>
       )}
 
-      <div style={{ marginTop:16,display:"flex",gap:8,justifyContent:"space-between",alignItems:"center" }} className="no-print">
-        <button style={{ ...btnGold,fontSize:12 }} onClick={()=>{
-          const w = window.open("","_blank","width=800,height:600");
-          if (!w) return;
-          const total = colecta.aportaciones.reduce((s,a)=>s+a.monto,0);
-          const filas = colecta.aportaciones.map((a,i)=>`
-            <tr style="border-bottom:1px solid #ddd;">
-              <td style="padding:7px 10px;text-align:center;">${i+1}</td>
-              <td style="padding:7px 10px;font-weight:500;">${a.nombre}</td>
-              <td style="padding:7px 10px;text-align:right;font-weight:600;">$${a.monto.toLocaleString("es-MX",{minimumFractionDigits:2})}</td>
-              <td style="padding:7px 10px;text-align:center;">${new Date(a.fecha).toLocaleDateString("es-MX",{day:"numeric",month:"long",year:"numeric"})}</td>
-              <td style="padding:7px 10px;color:#666;">${a.notas||""}</td>
-            </tr>`).join("");
-          w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${colecta.nombre}</title>
-          <style>
-            body{font-family:Arial,sans-serif;margin:30px;color:#1c1c1a;font-size:13px;}
-            h1{font-size:16px;font-weight:700;margin:0;}
-            h2{font-size:13px;font-weight:400;margin:4px 0 0;}
-            .header{text-align:center;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #1c1c1a;}
-            .cruz{font-size:22px;margin-bottom:4px;}
-            .subtitulo{font-size:12px;color:#555;margin-top:6px;}
-            table{width:100%;border-collapse:collapse;margin-top:4px;}
-            thead tr{background:#1c1c1a;color:#fff;}
-            thead th{padding:9px 10px;text-align:left;font-size:12px;font-weight:600;}
-            thead th.center{text-align:center;}
-            thead th.right{text-align:right;}
-            tbody tr:nth-child(even){background:#f9f8f6;}
-            .total-row{background:#b5883a!important;color:#fff;font-weight:700;}
-            .total-row td{padding:9px 10px;font-size:13px;}
-            .footer{margin-top:16px;font-size:11px;color:#888;display:flex;justify-content:space-between;}
-            @media print{body{margin:15px;}}
-          </style></head><body>
-          <div class="header">
-            <div class="cruz">✝</div>
-            <h1>PARROQUIA MARÍA MADRE DE DIOS</h1>
-            <h2>${colecta.nombre}</h2>
-            ${colecta.descripcion?`<div class="subtitulo">${colecta.descripcion}</div>`:""}
-            ${colecta.meta?`<div class="subtitulo">Meta: $${colecta.meta.toLocaleString("es-MX",{minimumFractionDigits:2})}</div>`:""}
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th class="center" style="width:40px;">No.</th>
-                <th>Nombre</th>
-                <th class="right" style="width:120px;">Monto</th>
-                <th class="center" style="width:130px;">Fecha</th>
-                <th style="width:180px;">Notas</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${filas}
-              <tr class="total-row">
-                <td colspan="2" style="text-align:right;">TOTAL</td>
-                <td style="text-align:right;">$${total.toLocaleString("es-MX",{minimumFractionDigits:2})}</td>
-                <td colspan="2">${colecta.aportaciones.length} aportaciones</td>
-              </tr>
-            </tbody>
-          </table>
-          <div class="footer">
-            <span>Generado: ${new Date().toLocaleDateString("es-MX",{day:"numeric",month:"long",year:"numeric"})}</span>
-            ${colecta.meta?`<span>Avance: ${Math.round(total/colecta.meta*100)}% de la meta</span>`:""}
-          </div>
-          <script>window.onload=()=>{window.print();}<\/script>
-          </body></html>`);
-          w.document.close();
-        }}>🖨️ Imprimir lista</button>
+      {/* Vista lista completa */}
+      {vista === "lista" && (
+        <>
+          <div style={{ fontSize:11,fontWeight:600,color:"#9b9890",letterSpacing:"0.05em",marginBottom:10 }}>TODAS LAS APORTACIONES ({colecta.aportaciones.length})</div>
+          {colecta.aportaciones.length === 0 ? (
+            <div style={{ textAlign:"center",padding:"2rem",color:"#9b9890",background:"#fafaf9",borderRadius:10,border:"1px dashed #e8e6e0" }}>Aún no hay aportaciones</div>
+          ) : (
+            <div style={{ display:"flex",flexDirection:"column",gap:6,maxHeight:300,overflowY:"auto" }}>
+              {colecta.aportaciones.map((a,i)=>(
+                <div key={a.id} style={{ display:"flex",alignItems:"center",gap:10,padding:"9px 12px",borderRadius:8,background:"#fafaf9",border:"1px solid #e8e6e0" }}>
+                  <span style={{ fontSize:12,color:"#9b9890",width:22,flexShrink:0 }}>{i+1}</span>
+                  <span style={{ flex:1,fontSize:13,fontWeight:500 }}>{a.nombre}</span>
+                  {a.notas && <span style={{ fontSize:11,color:"#9b9890" }}>{a.notas}</span>}
+                  <span style={{ fontSize:13,fontWeight:600,color:"#b5883a",flexShrink:0 }}>${a.monto.toLocaleString()}</span>
+                  <span style={{ fontSize:11,color:"#9b9890",flexShrink:0 }}>{new Date(a.fecha).toLocaleDateString("es-MX",{day:"numeric",month:"short"})}</span>
+                  <button onClick={()=>eliminar(a.id)} style={{ background:"none",border:"none",color:"#d1cfc8",fontSize:14,cursor:"pointer",padding:"2px" }}>✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Acciones */}
+      <div style={{ marginTop:18,display:"flex",gap:8,justifyContent:"space-between",alignItems:"center" }}>
+        <button style={{...btnGold,fontSize:12}} onClick={printFn}>🖨️ Imprimir lista</button>
         <button style={btnSec} onClick={onClose}>Cerrar</button>
       </div>
     </div>
@@ -700,7 +764,7 @@ export default function Dashboard() {
       )}
       {modal==="colectaDetalle" && selColecta && (
         <Modal title={selColecta.nombre} onClose={()=>setModal(null)} wide>
-          <ColectaDetalle colecta={selColecta} onClose={()=>setModal(null)} onRefresh={reload} />
+          <ColectaDetalle colecta={selColecta} alumnos={alumnos} onClose={()=>setModal(null)} onRefresh={reload} />
         </Modal>
       )}
     </div>
