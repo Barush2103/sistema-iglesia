@@ -6,7 +6,7 @@ const DOCS_POR_NIVEL: Record<string, string[]> = {
   PRECOMUNION: ["acta_nacimiento", "fe_bautizo"],
   COMUNION: ["acta_nacimiento", "fe_bautizo", "constancia_precomunion"],
   PRECONFIRMACION: ["acta_nacimiento", "fe_bautizo", "acta_comunion"],
-  CONFIRMACION: ["acta_nacimiento", "fe_bautizo", "constancia_preconfirmacion"],
+  CONFIRMACION: ["acta_nacimiento", "fe_bautizo", "acta_comunion", "constancia_preconfirmacion"],
 };
 
 const PAGOS_CIERRE: Record<string, string[]> = {
