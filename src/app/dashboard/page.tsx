@@ -361,9 +361,12 @@ function ColectaDetalle({ colecta, alumnos, onClose, onRefresh }: { colecta: Col
 }
 
 // ── Lista Imprimible ──────────────────────────────────────────────────────────
-function ListaImprimible({ alumnos, nivel, filtro }: { alumnos: Alumno[]; nivel: Nivel|"TODOS"; filtro: "documentos"|"pagos"|"contacto" }) {
+function ListaImprimible({ alumnos, nivel, dia, filtro }: { alumnos: Alumno[]; nivel: Nivel|"TODOS"; dia: string; filtro: "documentos"|"pagos"|"contacto" }) {
   const lista = (nivel === "TODOS" ? alumnos : alumnos.filter(a=>a.nivel===nivel))
+    .filter(a => dia === "TODOS" || a.dia === dia)
     .sort((a,b) => a.nombre.localeCompare(b.nombre, "es", { sensitivity: "base" }));
+
+  const subtitulo = `${nivel==="TODOS"?"Todos los niveles":NIVEL_LABEL[nivel as Nivel]}${dia!=="TODOS" ? ` · ${dia}` : ""}`;
   if (filtro === "contacto") {
     return (
       <div>
@@ -374,7 +377,7 @@ function ListaImprimible({ alumnos, nivel, filtro }: { alumnos: Alumno[]; nivel:
           <div style={{ textAlign:"center",marginBottom:16 }}>
             <img src="/logo.png" alt="Logo" style={{ width:80,height:"auto",marginBottom:6 }} />
             <div style={{ fontSize:16,fontWeight:700 }}>PARROQUIA MARÍA MADRE DE DIOS</div>
-            <div style={{ fontSize:14 }}>Catequesis 2026-2027 · {nivel==="TODOS"?"Todos los niveles":NIVEL_LABEL[nivel]}</div>
+            <div style={{ fontSize:14 }}>Catequesis 2026-2027 · {subtitulo}</div>
           </div>
           <table style={{ width:"100%",borderCollapse:"collapse",fontSize:12 }}>
             <thead>
@@ -416,7 +419,7 @@ function ListaImprimible({ alumnos, nivel, filtro }: { alumnos: Alumno[]; nivel:
           <div style={{ textAlign:"center",marginBottom:16 }}>
             <img src="/logo.png" alt="Logo" style={{ width:80,height:"auto",marginBottom:6 }} />
             <div style={{ fontSize:16,fontWeight:700 }}>PARROQUIA MARÍA MADRE DE DIOS</div>
-            <div style={{ fontSize:14 }}>Control de Documentos · {nivel==="TODOS"?"Todos los niveles":NIVEL_LABEL[nivel]}</div>
+            <div style={{ fontSize:14 }}>Control de Documentos · {subtitulo}</div>
           </div>
           <table style={{ width:"100%",borderCollapse:"collapse",fontSize:11 }}>
             <thead>
@@ -460,7 +463,7 @@ function ListaImprimible({ alumnos, nivel, filtro }: { alumnos: Alumno[]; nivel:
         <div style={{ textAlign:"center",marginBottom:16 }}>
           <img src="/logo.png" alt="Logo" style={{ width:80,height:"auto",marginBottom:6 }} />
           <div style={{ fontSize:16,fontWeight:700 }}>PARROQUIA MARÍA MADRE DE DIOS</div>
-          <div style={{ fontSize:14 }}>Control de Pagos · {nivel==="TODOS"?"Todos los niveles":NIVEL_LABEL[nivel]}</div>
+          <div style={{ fontSize:14 }}>Control de Pagos · {subtitulo}</div>
         </div>
         <table style={{ width:"100%",borderCollapse:"collapse",fontSize:11 }}>
           <thead>
@@ -591,6 +594,7 @@ export default function Dashboard() {
   const [selColecta, setSelColecta] = useState<Colecta|undefined>();
   const [editAlumno, setEditAlumno] = useState<Alumno|undefined>();
   const [impNivel, setImpNivel] = useState<Nivel|"TODOS">("TODOS");
+  const [impDia, setImpDia] = useState<"TODOS"|"Miércoles"|"Sábado">("TODOS");
   const [impFiltro, setImpFiltro] = useState<"documentos"|"pagos"|"contacto">("contacto");
   const [impMostrar, setImpMostrar] = useState(false);
   const [newColecta, setNewColecta] = useState({ nombre:"", descripcion:"", meta:"" });
@@ -825,12 +829,22 @@ export default function Dashboard() {
             {!impMostrar ? (
               <div style={{ background:"#fff",border:"1px solid #e8e6e0",borderRadius:12,padding:"24px",maxWidth:480 }}>
                 <div style={{ fontSize:15,fontWeight:600,marginBottom:18 }}>Generar lista para imprimir</div>
-                <div style={{ marginBottom:14 }}>
-                  <label style={{ fontSize:12,color:"#6b6860",display:"block",marginBottom:6 }}>Nivel</label>
-                  <select style={inputSt} value={impNivel} onChange={e=>setImpNivel(e.target.value as Nivel|"TODOS")}>
-                    <option value="TODOS">Todos los niveles</option>
-                    {(Object.entries(NIVEL_LABEL) as [Nivel,string][]).map(([k,v])=><option key={k} value={k}>{v}</option>)}
-                  </select>
+                <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14 }}>
+                  <div>
+                    <label style={{ fontSize:12,color:"#6b6860",display:"block",marginBottom:6 }}>Nivel</label>
+                    <select style={inputSt} value={impNivel} onChange={e=>setImpNivel(e.target.value as Nivel|"TODOS")}>
+                      <option value="TODOS">Todos los niveles</option>
+                      {(Object.entries(NIVEL_LABEL) as [Nivel,string][]).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize:12,color:"#6b6860",display:"block",marginBottom:6 }}>Día</label>
+                    <select style={inputSt} value={impDia} onChange={e=>setImpDia(e.target.value as typeof impDia)}>
+                      <option value="TODOS">Todos los días</option>
+                      <option value="Miércoles">Miércoles</option>
+                      <option value="Sábado">Sábado</option>
+                    </select>
+                  </div>
                 </div>
                 <div style={{ marginBottom:20 }}>
                   <label style={{ fontSize:12,color:"#6b6860",display:"block",marginBottom:6 }}>Tipo de lista</label>
@@ -843,8 +857,11 @@ export default function Dashboard() {
                     ))}
                   </div>
                 </div>
-                <div style={{ display:"flex",gap:8 }}>
+                <div style={{ display:"flex",gap:8,alignItems:"center" }}>
                   <button style={btnGold} onClick={()=>setImpMostrar(true)}>Ver lista</button>
+                  {impDia !== "TODOS" && impNivel !== "TODOS" && (
+                    <span style={{ fontSize:12,color:"#b5883a" }}>📋 {NIVEL_LABEL[impNivel as Nivel]} · {impDia}</span>
+                  )}
                 </div>
               </div>
             ) : (
@@ -854,7 +871,7 @@ export default function Dashboard() {
                   <button style={btnGold} onClick={()=>window.print()}>🖨️ Imprimir</button>
                 </div>
                 <div style={{ background:"#fff",border:"1px solid #e8e6e0",borderRadius:12,padding:24 }}>
-                  <ListaImprimible alumnos={alumnos} nivel={impNivel} filtro={impFiltro} />
+                  <ListaImprimible alumnos={alumnos} nivel={impNivel} dia={impDia} filtro={impFiltro} />
                 </div>
               </div>
             )}
