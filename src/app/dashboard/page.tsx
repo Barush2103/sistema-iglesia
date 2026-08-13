@@ -236,14 +236,22 @@ function ColectaDetalle({ colecta, alumnos, onClose, onRefresh }: { colecta: Col
       ? `${filtroNivel !== "TODOS" ? NIVEL_LABEL_PRINT[filtroNivel] : "Todos los niveles"}${filtroDia !== "TODOS" ? ` · ${filtroDia}` : ""}`
       : "Todos los grupos";
 
-    const filas = aportacionesFiltradas.map((a,i)=>`
+    // Mapa de alumnoId → datos del alumno para mostrar nivel y día
+    const alumnoMap: Record<number, Alumno> = {};
+    alumnos.forEach(a => { alumnoMap[a.id] = a; });
+
+    const filas = aportacionesFiltradas.map((a,i)=>{
+      const alu = a.alumnoId ? alumnoMap[a.alumnoId] : null;
+      const nivelDia = alu ? `<div style="font-size:10px;color:#888;margin-top:2px;">${NIVEL_LABEL_PRINT[alu.nivel]}${alu.dia ? ` · ${alu.dia}` : ""}</div>` : "";
+      return `
       <tr style="border-bottom:1px solid #ddd;">
         <td style="padding:7px 10px;text-align:center;">${i+1}</td>
-        <td style="padding:7px 10px;font-weight:500;">${a.nombre}</td>
+        <td style="padding:7px 10px;font-weight:500;">${a.nombre}${nivelDia}</td>
         <td style="padding:7px 10px;text-align:right;font-weight:600;">$${a.monto.toLocaleString("es-MX",{minimumFractionDigits:2})}</td>
         <td style="padding:7px 10px;text-align:center;">${new Date(a.fecha).toLocaleDateString("es-MX",{day:"numeric",month:"long",year:"numeric"})}</td>
         <td style="padding:7px 10px;color:#666;">${a.notas||""}</td>
-      </tr>`).join("");
+      </tr>`;
+    }).join("");
     w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${colecta.nombre}</title>
     <style>body{font-family:Arial,sans-serif;margin:30px;color:#1c1c1a;font-size:13px;}.header{text-align:center;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #1c1c1a;}.cruz{font-size:22px;margin-bottom:4px;}table{width:100%;border-collapse:collapse;margin-top:4px;}thead tr{background:#1c1c1a;color:#fff;}thead th{padding:9px 10px;text-align:left;font-size:12px;font-weight:600;}tbody tr:nth-child(even){background:#f9f8f6;}.total-row{background:#b5883a!important;color:#fff;font-weight:700;}.total-row td{padding:9px 10px;font-size:13px;}.footer{margin-top:16px;font-size:11px;color:#888;display:flex;justify-content:space-between;}@media print{body{margin:15px;}}</style>
     </head><body>
