@@ -11,6 +11,7 @@ type Colecta = { id: number; nombre: string; descripcion?: string; meta?: number
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const NIVEL_LABEL: Record<Nivel, string> = { PRECOMUNION: "Pre-Comunión", COMUNION: "Comunión", PRECONFIRMACION: "Pre-Confirmación", CONFIRMACION: "Confirmación" };
+const NIVEL_LABEL_PRINT: Record<string, string> = { PRECOMUNION: "Pre-Comunión", COMUNION: "Comunión", PRECONFIRMACION: "Pre-Confirmación", CONFIRMACION: "Confirmación" };
 const NIVEL_COLOR: Record<Nivel, string> = { PRECOMUNION: "#7c3aed", COMUNION: "#2563eb", PRECONFIRMACION: "#d97706", CONFIRMACION: "#16a34a" };
 const NIVEL_BG: Record<Nivel, string> = { PRECOMUNION: "#f5f3ff", COMUNION: "#eff6ff", PRECONFIRMACION: "#fffbeb", CONFIRMACION: "#f0fdf4" };
 const DOC_LABEL: Record<string,string> = { acta_nacimiento: "Acta de nacimiento", fe_bautizo: "Fe de bautizo", constancia_precomunion: "Constancia de Pre-Comunión", acta_comunion: "Acta de Comunión", constancia_preconfirmacion: "Constancia de Pre-Confirmación" };
@@ -222,7 +223,20 @@ function ColectaDetalle({ colecta, alumnos, onClose, onRefresh }: { colecta: Col
   const printFn = () => {
     const w = window.open("","_blank","width=800,height=600");
     if (!w) return;
-    const filas = colecta.aportaciones.map((a,i)=>`
+
+    // Filtrar aportaciones según el grupo visible actualmente
+    const idsDelGrupo = new Set(alumnosFiltrados.map(a => a.id));
+    const aportacionesFiltradas = filtroNivel === "TODOS" && filtroDia === "TODOS"
+      ? colecta.aportaciones
+      : colecta.aportaciones.filter(a => a.alumnoId ? idsDelGrupo.has(a.alumnoId) : true);
+
+    const totalFiltrado = aportacionesFiltradas.reduce((s,a) => s + a.monto, 0);
+
+    const subtituloFiltro = filtroNivel !== "TODOS" || filtroDia !== "TODOS"
+      ? `${filtroNivel !== "TODOS" ? NIVEL_LABEL_PRINT[filtroNivel] : "Todos los niveles"}${filtroDia !== "TODOS" ? ` · ${filtroDia}` : ""}`
+      : "Todos los grupos";
+
+    const filas = aportacionesFiltradas.map((a,i)=>`
       <tr style="border-bottom:1px solid #ddd;">
         <td style="padding:7px 10px;text-align:center;">${i+1}</td>
         <td style="padding:7px 10px;font-weight:500;">${a.nombre}</td>
@@ -233,10 +247,10 @@ function ColectaDetalle({ colecta, alumnos, onClose, onRefresh }: { colecta: Col
     w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>${colecta.nombre}</title>
     <style>body{font-family:Arial,sans-serif;margin:30px;color:#1c1c1a;font-size:13px;}.header{text-align:center;margin-bottom:20px;padding-bottom:12px;border-bottom:2px solid #1c1c1a;}.cruz{font-size:22px;margin-bottom:4px;}table{width:100%;border-collapse:collapse;margin-top:4px;}thead tr{background:#1c1c1a;color:#fff;}thead th{padding:9px 10px;text-align:left;font-size:12px;font-weight:600;}tbody tr:nth-child(even){background:#f9f8f6;}.total-row{background:#b5883a!important;color:#fff;font-weight:700;}.total-row td{padding:9px 10px;font-size:13px;}.footer{margin-top:16px;font-size:11px;color:#888;display:flex;justify-content:space-between;}@media print{body{margin:15px;}}</style>
     </head><body>
-    <div class="header"><div class="cruz"><img src="/logo.png" style="width:70px;height:auto;" alt="Logo"/></div><h1 style="font-size:16px;font-weight:700;margin:0;">PARROQUIA MARÍA MADRE DE DIOS</h1><h2 style="font-size:13px;font-weight:400;margin:4px 0 0;">${colecta.nombre}</h2>${colecta.descripcion?`<div style="font-size:12px;color:#555;margin-top:6px;">${colecta.descripcion}</div>`:""}${colecta.meta?`<div style="font-size:12px;color:#555;margin-top:4px;">Meta: $${colecta.meta.toLocaleString("es-MX",{minimumFractionDigits:2})}</div>`:""}</div>
+    <div class="header"><div class="cruz"><img src="/logo.png" style="width:70px;height:auto;" alt="Logo"/></div><h1 style="font-size:16px;font-weight:700;margin:0;">PARROQUIA MARÍA MADRE DE DIOS</h1><h2 style="font-size:13px;font-weight:400;margin:4px 0 0;">${colecta.nombre}</h2><div style="font-size:12px;color:#555;margin-top:4px;">${subtituloFiltro}</div>${colecta.descripcion?`<div style="font-size:12px;color:#555;margin-top:4px;">${colecta.descripcion}</div>`:""}${colecta.meta?`<div style="font-size:12px;color:#555;margin-top:4px;">Meta: $${colecta.meta.toLocaleString("es-MX",{minimumFractionDigits:2})}</div>`:""}</div>
     <table><thead><tr><th style="width:40px;text-align:center;">No.</th><th>Nombre</th><th style="width:120px;text-align:right;">Monto</th><th style="width:130px;text-align:center;">Fecha</th><th style="width:180px;">Notas</th></tr></thead>
-    <tbody>${filas}<tr class="total-row"><td colspan="2" style="text-align:right;">TOTAL</td><td style="text-align:right;">$${total.toLocaleString("es-MX",{minimumFractionDigits:2})}</td><td colspan="2">${colecta.aportaciones.length} aportaciones</td></tr></tbody></table>
-    <div class="footer"><span>Generado: ${new Date().toLocaleDateString("es-MX",{day:"numeric",month:"long",year:"numeric"})}</span>${colecta.meta?`<span>Avance: ${Math.round(total/colecta.meta*100)}% de la meta</span>`:""}</div>
+    <tbody>${filas}<tr class="total-row"><td colspan="2" style="text-align:right;">TOTAL</td><td style="text-align:right;">$${totalFiltrado.toLocaleString("es-MX",{minimumFractionDigits:2})}</td><td colspan="2">${aportacionesFiltradas.length} aportaciones</td></tr></tbody></table>
+    <div class="footer"><span>Generado: ${new Date().toLocaleDateString("es-MX",{day:"numeric",month:"long",year:"numeric"})}</span>${colecta.meta?`<span>Avance: ${Math.round(totalFiltrado/colecta.meta*100)}% de la meta</span>`:""}</div>
     <script>window.onload=()=>{window.print();}<\/script></body></html>`);
     w.document.close();
   };
