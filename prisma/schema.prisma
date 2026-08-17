@@ -9,15 +9,26 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+model Ciclo {
+  id        Int       @id @default(autoincrement())
+  nombre    String    // "2026-2027"
+  activo    Boolean   @default(false)
+  alumnos   Alumno[]
+  colectas  Colecta[]
+  createdAt DateTime  @default(now())
+}
+
 model Alumno {
   id              Int          @id @default(autoincrement())
   nombre          String
   nivel           Nivel
   catequista      String?
-  dia             String?      // Lunes, Miércoles, etc.
+  dia             String?
   responsable     String?
   telefonoCasa    String?
   telefonoCelular String?
+  cicloId         Int
+  ciclo           Ciclo        @relation(fields: [cicloId], references: [id])
   documentos      Documento[]
   pagos           Pago[]
   aportaciones    Aportacion[]
@@ -26,26 +37,26 @@ model Alumno {
 }
 
 model Documento {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   alumnoId  Int
-  alumno    Alumno   @relation(fields: [alumnoId], references: [id], onDelete: Cascade)
-  tipo      String   // "acta_nacimiento", "fe_bautizo", etc.
-  entregado Boolean  @default(false)
+  alumno    Alumno    @relation(fields: [alumnoId], references: [id], onDelete: Cascade)
+  tipo      String
+  entregado Boolean   @default(false)
   fecha     DateTime?
   notas     String?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 }
 
 model Pago {
-  id        Int      @id @default(autoincrement())
+  id        Int       @id @default(autoincrement())
   alumnoId  Int
-  alumno    Alumno   @relation(fields: [alumnoId], references: [id], onDelete: Cascade)
-  tipo      String   // "sacramento", "retiro", "ofrenda", "silla"
+  alumno    Alumno    @relation(fields: [alumnoId], references: [id], onDelete: Cascade)
+  tipo      String
   monto     Float?
-  pagado    Boolean  @default(false)
+  pagado    Boolean   @default(false)
   fecha     DateTime?
   notas     String?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 }
 
 model Colecta {
@@ -54,6 +65,8 @@ model Colecta {
   descripcion  String?
   meta         Float?
   activa       Boolean      @default(true)
+  cicloId      Int
+  ciclo        Ciclo        @relation(fields: [cicloId], references: [id])
   aportaciones Aportacion[]
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
@@ -65,18 +78,11 @@ model Aportacion {
   colecta   Colecta  @relation(fields: [colectaId], references: [id], onDelete: Cascade)
   alumnoId  Int?
   alumno    Alumno?  @relation(fields: [alumnoId], references: [id], onDelete: SetNull)
-  nombre    String   // puede ser alumno o persona externa
+  nombre    String
   monto     Float
   notas     String?
   fecha     DateTime @default(now())
   createdAt DateTime @default(now())
-}
-
-enum Nivel {
-  PRECOMUNION
-  COMUNION
-  PRECONFIRMACION
-  CONFIRMACION
 }
 
 model Config {
@@ -84,4 +90,11 @@ model Config {
   clave     String   @unique
   valor     String
   updatedAt DateTime @updatedAt
+}
+
+enum Nivel {
+  PRECOMUNION
+  COMUNION
+  PRECONFIRMACION
+  CONFIRMACION
 }

@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from "react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+type Ciclo = { id: number; nombre: string; activo: boolean; createdAt: string; _count: { alumnos: number; colectas: number } };
 type Nivel = "PRECOMUNION"|"COMUNION"|"PRECONFIRMACION"|"CONFIRMACION";
 type Documento = { id: number; tipo: string; entregado: boolean; fecha?: string; notas?: string };
 type Pago = { id: number; tipo: string; monto?: number; pagado: boolean; fecha?: string; notas?: string };
@@ -521,6 +522,162 @@ function ListaImprimible({ alumnos, nivel, dia, filtro }: { alumnos: Alumno[]; n
   );
 }
 
+// ── Gestión de Ciclos ─────────────────────────────────────────────────────────
+const NIVEL_SIGUIENTE: Record<string,string> = { PRECOMUNION:"Comunión", COMUNION:"Pre-Confirmación", PRECONFIRMACION:"Confirmación", CONFIRMACION:"Egresa ✓" };
+
+function GestionCiclos({ ciclos, cicloActivo, alumnos, onRefresh }: { ciclos: Ciclo[]; cicloActivo: Ciclo|null; alumnos: Alumno[]; onRefresh: () => void }) {
+  const [paso, setPaso] = useState<"inicio"|"promover"|"confirmar">("inicio");
+  const [nombreNuevo, setNombreNuevo] = useState("");
+  const [seleccionados, setSeleccionados] = useState<Set<number>>(new Set());
+  const [loading, setLoading] = useState(false);
+  const [resultado, setResultado] = useState<{promovidos:number;egresados:number}|null>(null);
+
+  // Al abrir, preseleccionar todos
+  function iniciarPromocion() {
+    const todos = new Set(alumnos.map(a=>a.id));
+    setSeleccionados(todos);
+    setPaso("promover");
+  }
+
+  function toggleAlumno(id: number) {
+    setSeleccionados(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  async function confirmarNuevoCiclo() {
+    if (!nombreNuevo.trim() || !cicloActivo) return;
+    setLoading(true);
+    const res = await fetch(`/api/ciclos/${cicloActivo.id}/nuevo-ciclo`, {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ nombreNuevoCiclo: nombreNuevo, alumnosPromover: [...seleccionados] })
+    });
+    const data = await res.json();
+    setLoading(false);
+    if (data.ok) { setResultado({ promovidos: data.promovidos, egresados: data.egresados }); setPaso("inicio"); onRefresh(); }
+  }
+
+  async function activarCiclo(id: number) {
+    if (!confirm("¿Cambiar al ciclo seleccionado? Verás los datos de ese año.")) return;
+    await fetch(`/api/ciclos/${id}`, { method:"PUT" });
+    onRefresh();
+  }
+
+  const niveles = ["PRECOMUNION","COMUNION","PRECONFIRMACION","CONFIRMACION"] as const;
+
+  return (
+    <div style={{ maxWidth:640 }}>
+      {/* Ciclo activo */}
+      <div style={{ background: cicloActivo?"#f0fdf4":"#fef2f2", border:`1px solid ${cicloActivo?"#bbf7d0":"#fecaca"}`, borderRadius:12, padding:"18px 20px", marginBottom:20 }}>
+        <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center" }}>
+          <div>
+            <div style={{ fontSize:12,fontWeight:600,color:cicloActivo?"#16a34a":"#dc2626",letterSpacing:"0.05em",marginBottom:4 }}>CICLO ACTIVO</div>
+            <div style={{ fontSize:22,fontWeight:700,color:"#1c1c1a" }}>{cicloActivo ? cicloActivo.nombre : "Sin ciclo activo"}</div>
+            {cicloActivo && <div style={{ fontSize:13,color:"#6b6860",marginTop:2 }}>{alumnos.length} alumnos registrados</div>}
+          </div>
+          {!cicloActivo && (
+            <div>
+              <div style={{ marginBottom:8 }}><input style={inputSt} value={nombreNuevo} onChange={e=>setNombreNuevo(e.target.value)} placeholder="Ej. 2026-2027" /></div>
+              <button style={btnPri} onClick={async()=>{
+                if (!nombreNuevo.trim()) return;
+                await fetch("/api/ciclos",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nombre:nombreNuevo})});
+                setNombreNuevo(""); onRefresh();
+              }}>Crear primer ciclo</button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Resultado de promoción */}
+      {resultado && (
+        <div style={{ background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"14px 16px",marginBottom:16 }}>
+          <div style={{ fontWeight:600,color:"#16a34a",marginBottom:4 }}>✓ Nuevo ciclo iniciado correctamente</div>
+          <div style={{ fontSize:13,color:"#6b6860" }}>{resultado.promovidos} alumnos promovidos al siguiente nivel · {resultado.egresados} alumnos egresaron</div>
+          <button style={{ fontSize:12,color:"#16a34a",background:"none",border:"none",cursor:"pointer",marginTop:4 }} onClick={()=>setResultado(null)}>Cerrar</button>
+        </div>
+      )}
+
+      {/* Abrir nuevo ciclo */}
+      {cicloActivo && paso === "inicio" && (
+        <div style={{ background:"#fff",border:"1px solid #e8e6e0",borderRadius:12,padding:"20px",marginBottom:20 }}>
+          <div style={{ fontSize:15,fontWeight:600,marginBottom:6 }}>🔄 Iniciar nuevo ciclo escolar</div>
+          <div style={{ fontSize:13,color:"#6b6860",marginBottom:16 }}>El ciclo actual se archivará. Podrás elegir qué alumnos se promueven al siguiente nivel. Los de Confirmación egresarán automáticamente.</div>
+          <div style={{ marginBottom:14 }}>
+            <label style={{ fontSize:12,color:"#6b6860",display:"block",marginBottom:6 }}>Nombre del nuevo ciclo *</label>
+            <input style={{...inputSt,maxWidth:200}} value={nombreNuevo} onChange={e=>setNombreNuevo(e.target.value)} placeholder="Ej. 2027-2028" />
+          </div>
+          <button style={btnGold} onClick={iniciarPromocion} disabled={!nombreNuevo.trim()}>Seleccionar alumnos a promover →</button>
+        </div>
+      )}
+
+      {/* Paso de selección */}
+      {paso === "promover" && (
+        <div style={{ background:"#fff",border:"1px solid #e8e6e0",borderRadius:12,padding:"20px",marginBottom:20 }}>
+          <div style={{ fontSize:15,fontWeight:600,marginBottom:4 }}>Selecciona quién pasa al nuevo ciclo</div>
+          <div style={{ fontSize:13,color:"#9b9890",marginBottom:16 }}>Desmarca a quienes no continúan. Los de Confirmación egresarán aunque estén marcados.</div>
+          <div style={{ display:"flex",gap:8,marginBottom:14 }}>
+            <button style={{...btnSec,fontSize:12,padding:"5px 12px"}} onClick={()=>setSeleccionados(new Set(alumnos.map(a=>a.id)))}>Seleccionar todos</button>
+            <button style={{...btnSec,fontSize:12,padding:"5px 12px"}} onClick={()=>setSeleccionados(new Set())}>Deseleccionar todos</button>
+          </div>
+          {niveles.map(nivel=>{
+            const grupo = alumnos.filter(a=>a.nivel===nivel);
+            if (!grupo.length) return null;
+            return (
+              <div key={nivel} style={{ marginBottom:14 }}>
+                <div style={{ fontSize:11,fontWeight:600,color:NIVEL_COLOR[nivel],letterSpacing:"0.05em",marginBottom:8,display:"flex",alignItems:"center",gap:8 }}>
+                  {NIVEL_LABEL[nivel].toUpperCase()}
+                  <span style={{ fontSize:11,fontWeight:400,color:"#9b9890" }}>→ {NIVEL_SIGUIENTE[nivel]}</span>
+                </div>
+                {grupo.map(a=>(
+                  <div key={a.id} onClick={()=>toggleAlumno(a.id)} style={{ display:"flex",alignItems:"center",gap:10,padding:"8px 12px",borderRadius:8,border:"1px solid",borderColor:seleccionados.has(a.id)?"#16a34a33":"#e8e6e0",background:seleccionados.has(a.id)?"#f0fdf4":"#fafaf9",cursor:"pointer",marginBottom:4 }}>
+                    <div style={{ width:20,height:20,borderRadius:4,border:"1.5px solid",borderColor:seleccionados.has(a.id)?"#16a34a":"#d1cfc8",background:seleccionados.has(a.id)?"#16a34a":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0 }}>
+                      {seleccionados.has(a.id) && <span style={{ color:"#fff",fontSize:12,fontWeight:700 }}>✓</span>}
+                    </div>
+                    <span style={{ flex:1,fontSize:13 }}>{a.nombre}</span>
+                    {a.dia && <span style={{ fontSize:11,color:"#9b9890" }}>{a.dia}</span>}
+                    {nivel==="CONFIRMACION" && <span style={{ fontSize:11,color:"#b5883a",fontWeight:500 }}>Egresa</span>}
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+          <div style={{ display:"flex",gap:8,marginTop:16 }}>
+            <button style={btnSec} onClick={()=>setPaso("inicio")}>← Cancelar</button>
+            <button style={btnPri} onClick={confirmarNuevoCiclo} disabled={loading}>{loading?"Procesando...":"✓ Confirmar nuevo ciclo"}</button>
+          </div>
+        </div>
+      )}
+
+      {/* Histórico de ciclos */}
+      <div style={{ background:"#fff",border:"1px solid #e8e6e0",borderRadius:12,padding:"20px" }}>
+        <div style={{ fontSize:14,fontWeight:600,marginBottom:14 }}>📂 Histórico de ciclos</div>
+        {ciclos.length === 0 ? (
+          <div style={{ textAlign:"center",padding:"1.5rem",color:"#9b9890",fontSize:13 }}>No hay ciclos registrados aún</div>
+        ) : (
+          <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
+            {ciclos.map(c=>(
+              <div key={c.id} style={{ display:"flex",alignItems:"center",gap:12,padding:"12px 14px",borderRadius:9,border:"1px solid",borderColor:c.activo?"#16a34a44":"#e8e6e0",background:c.activo?"#f0fdf4":"#fafaf9" }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:600,fontSize:14,display:"flex",alignItems:"center",gap:8 }}>
+                    {c.nombre}
+                    {c.activo && <span style={{ fontSize:11,padding:"2px 8px",borderRadius:20,background:"#16a34a",color:"#fff",fontWeight:500 }}>Activo</span>}
+                  </div>
+                  <div style={{ fontSize:12,color:"#9b9890",marginTop:2 }}>{c._count.alumnos} alumnos · {c._count.colectas} cooperaciones</div>
+                </div>
+                {!c.activo && (
+                  <button onClick={()=>activarCiclo(c.id)} style={{ ...btnSec,fontSize:12,padding:"5px 12px" }}>Ver este ciclo</button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Config Pines ──────────────────────────────────────────────────────────────
 function ConfigPines() {
   const [pinSuperAdmin, setPinSuperAdmin] = useState("");
@@ -608,7 +765,9 @@ function ConfigPines() {
 export default function Dashboard() {
   const [alumnos, setAlumnos] = useState<Alumno[]>([]);
   const [colectas, setColectas] = useState<Colecta[]>([]);
-  const [seccion, setSeccion] = useState<"catequesis"|"colectas"|"listas"|"config">("listas");
+  const [ciclos, setCiclos] = useState<Ciclo[]>([]);
+  const [cicloActivo, setCicloActivo] = useState<Ciclo|null>(null);
+  const [seccion, setSeccion] = useState<"catequesis"|"colectas"|"listas"|"config"|"ciclos">("listas");
   const [filtroNivel, setFiltroNivel] = useState<Nivel|"TODOS">("TODOS");
   const [busqueda, setBusqueda] = useState("");
   const [modal, setModal] = useState<null|"alumno"|"alumnoDetalle"|"colecta"|"colectaDetalle"|"imprimir">(null);
@@ -624,8 +783,18 @@ export default function Dashboard() {
   const [rol, setRol] = useState<"superadmin"|"admin"|"consulta"|null>(null);
 
   const load = useCallback(async () => {
-    const [a,c] = await Promise.all([fetch("/api/alumnos").then(r=>r.json()), fetch("/api/colectas").then(r=>r.json())]);
-    setAlumnos(Array.isArray(a)?a:[]); setColectas(Array.isArray(c)?c:[]); setLoading(false);
+    const [a,c,ci] = await Promise.all([
+      fetch("/api/alumnos").then(r=>r.json()),
+      fetch("/api/colectas").then(r=>r.json()),
+      fetch("/api/ciclos").then(r=>r.json()),
+    ]);
+    setAlumnos(Array.isArray(a)?a:[]);
+    setColectas(Array.isArray(c)?c:[]);
+    if (Array.isArray(ci)) {
+      setCiclos(ci);
+      setCicloActivo(ci.find((x:Ciclo)=>x.activo)||null);
+    }
+    setLoading(false);
   }, []);
 
   const reload = useCallback(async () => {
@@ -693,15 +862,15 @@ export default function Dashboard() {
           <img src="/logo.png" alt="Logo" style={{ width:38,height:38,objectFit:"contain",filter:"brightness(0) invert(1)" }} />
           <div>
             <div style={{ fontWeight:600,fontSize:14,lineHeight:1.2 }}>Parroquia María Madre de Dios</div>
-            <div style={{ fontSize:11,color:"#9b9890" }}>Sistema de Control · Catequesis 2026-2027</div>
+            <div style={{ fontSize:11,color:"#9b9890" }}>Sistema de Control · {cicloActivo ? cicloActivo.nombre : "Sin ciclo activo"}</div>
           </div>
         </div>
         <div style={{ display:"flex",alignItems:"center",gap:8 }}>
           <nav style={{ display:"flex",gap:4 }}>
             {(rol === "superadmin"
-              ? [["catequesis","📚 Catequesis"],["colectas","💰 Cooperaciones"],["listas","🖨️ Listas"],["config","⚙️ Config"]]
+              ? [["catequesis","📚 Catequesis"],["colectas","💰 Cooperaciones"],["listas","🖨️ Listas"],["ciclos","🔄 Ciclos"],["config","⚙️ Config"]]
               : rol === "admin"
-              ? [["catequesis","📚 Catequesis"],["colectas","💰 Cooperaciones"],["listas","🖨️ Listas"]]
+              ? [["catequesis","📚 Catequesis"],["colectas","💰 Cooperaciones"],["listas","🖨️ Listas"],["ciclos","🔄 Ciclos"]]
               : [["listas","🖨️ Listas"]]
             ).map(([id,label])=>(
               <button key={id} onClick={()=>setSeccion(id as typeof seccion)} style={{ padding:"7px 14px",borderRadius:7,border:"none",background:seccion===id?"rgba(255,255,255,0.15)":"transparent",color:seccion===id?"#fff":"#9b9890",fontSize:13,cursor:"pointer",fontWeight:seccion===id?500:400 }}>{label}</button>
@@ -898,6 +1067,11 @@ export default function Dashboard() {
               </div>
             )}
           </>
+        )}
+
+        {/* ── CICLOS ── */}
+        {seccion === "ciclos" && (rol === "admin" || rol === "superadmin") && (
+          <GestionCiclos ciclos={ciclos} cicloActivo={cicloActivo} alumnos={alumnos} onRefresh={load} />
         )}
 
         {/* ── CONFIG ── */}

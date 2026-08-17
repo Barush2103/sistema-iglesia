@@ -14,11 +14,29 @@ const PAGOS_CIERRE: Record<string, string[]> = {
   CONFIRMACION: ["doc_padrino", "sacramento", "retiro", "ofrenda"],
 };
 
+async function getCicloActivo() {
+  return prisma.ciclo.findFirst({ where: { activo: true } });
+}
+
 export async function GET(req: NextRequest) {
   try {
     const nivel = req.nextUrl.searchParams.get("nivel") as Nivel | null;
+    const cicloId = req.nextUrl.searchParams.get("cicloId");
+
+    let targetCicloId: number;
+    if (cicloId) {
+      targetCicloId = Number(cicloId);
+    } else {
+      const ciclo = await getCicloActivo();
+      if (!ciclo) return NextResponse.json([]);
+      targetCicloId = ciclo.id;
+    }
+
     const alumnos = await prisma.alumno.findMany({
-      where: nivel ? { nivel } : undefined,
+      where: {
+        cicloId: targetCicloId,
+        ...(nivel ? { nivel } : {}),
+      },
       orderBy: [{ nombre: "asc" }],
       include: { documentos: true, pagos: true },
     });
@@ -34,25 +52,18 @@ export async function POST(req: NextRequest) {
     const { nombre, nivel, catequista, dia, responsable, telefonoCasa, telefonoCelular } = body;
     if (!nombre?.trim() || !nivel) return NextResponse.json({ error: "Nombre y nivel requeridos" }, { status: 400 });
 
+    const ciclo = await getCicloActivo();
+    if (!ciclo) return NextResponse.json({ error: "No hay ciclo activo. Crea un ciclo primero desde la sección de Admin." }, { status: 400 });
+
     const alumno = await prisma.alumno.create({
       data: {
-        nombre: nombre.trim(),
-        nivel: nivel as Nivel,
-        catequista: catequista?.trim() || null,
-        dia: dia?.trim() || null,
-        responsable: responsable?.trim() || null,
-        telefonoCasa: telefonoCasa?.trim() || null,
+        nombre: nombre.trim(), nivel: nivel as Nivel,
+        catequista: catequista?.trim() || null, dia: dia?.trim() || null,
+        responsable: responsable?.trim() || null, telefonoCasa: telefonoCasa?.trim() || null,
         telefonoCelular: telefonoCelular?.trim() || null,
-        documentos: {
-          create: (DOCS_POR_NIVEL[nivel] || []).map((tipo) => ({ tipo, entregado: false })),
-        },
-        pagos: {
-          create: (PAGOS_CIERRE[nivel] || []).map((tipo) => ({
-            tipo,
-            monto: tipo === "sacramento" ? 500 : tipo === "retiro" ? 250 : null,
-            pagado: false,
-          })),
-        },
+        cicloId: ciclo.id,
+        documentos: { create: (DOCS_POR_NIVEL[nivel] || []).map((tipo) => ({ tipo, entregado: false })) },
+        pagos: { create: (PAGOS_CIERRE[nivel] || []).map((tipo) => ({ tipo, monto: tipo === "sacramento" ? 500 : tipo === "retiro" ? 250 : null, pagado: false })) },
       },
       include: { documentos: true, pagos: true },
     });
